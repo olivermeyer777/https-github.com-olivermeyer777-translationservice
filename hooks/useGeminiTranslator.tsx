@@ -35,6 +35,33 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   const retryTimeoutRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
 
+  // Helper to add or append transcript
+  const addTranscriptChunk = (text: string, senderRole: UserRole, isTranslation: boolean) => {
+      setTranscripts(prev => {
+          const lastItem = prev[prev.length - 1];
+          const senderLabel = senderRole === 'CUSTOMER' ? 'Client' : 'Agent';
+          
+          // Heuristic: If same sender, same type, we append.
+          // We assume Gemini sends partials that fit together.
+          if (lastItem && lastItem.sender === senderLabel && lastItem.isTranslation === isTranslation) {
+              // Ensure we don't double space if not needed, but generally just concat
+              const spacer = (lastItem.text.endsWith(' ') || text.startsWith(' ') || text.match(/^[.,!?]/)) ? '' : ' ';
+              return [
+                  ...prev.slice(0, -1),
+                  { ...lastItem, text: lastItem.text + spacer + text }
+              ];
+          }
+
+          // New Bubble
+          return [...prev, {
+              id: Date.now() + Math.random(),
+              text: text.trim(), // Trim start of new bubble
+              sender: senderLabel,
+              isTranslation
+          }].slice(-50);
+      });
+  };
+
   const playAudio = useCallback(async (base64Data: string) => {
     try {
         if (!audioContextRef.current) {
@@ -76,12 +103,8 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
             playAudio(msg.data);
         }
         if (msg.type === 'TRANSCRIPT' && msg.senderRole !== userRole) {
-             setTranscripts(prev => [...prev, { 
-                id: Date.now() + Math.random(), 
-                text: msg.text, 
-                sender: msg.senderRole === 'CUSTOMER' ? 'Client' : 'Agent',
-                isTranslation: msg.isTranslation
-             }].slice(-50));
+             // Handle Remote Transcript Aggregation
+             addTranscriptChunk(msg.text, msg.senderRole, msg.isTranslation);
         }
     });
 
@@ -142,13 +165,9 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
                         translationTimeoutRef.current = window.setTimeout(() => setIsTranslating(false), 5000);
                     }
 
-                    const newItem: TranscriptItem = {
-                        id: Date.now() + Math.random(),
-                        text,
-                        sender: userRole === 'CUSTOMER' ? 'Client' : 'Agent',
-                        isTranslation: !isInput
-                    };
-                    setTranscripts(prev => [...prev, newItem].slice(-50));
+                    // Handle Local Transcript Aggregation
+                    addTranscriptChunk(text, userRole, !isInput);
+                    
                     signaling.send({
                         type: 'TRANSCRIPT',
                         senderRole: userRole,

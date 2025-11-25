@@ -53,6 +53,8 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
   const [isCamOn, setIsCamOn] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [roomId, setRoomId] = useState<string>('');
+  
+  const transcriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -89,6 +91,13 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
     // Cleanup on unmount
     return () => disconnectGemini();
   }, []);
+
+  // Auto-scroll transcript
+  useEffect(() => {
+      if (transcriptRef.current) {
+          transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+      }
+  }, [transcripts]);
 
   const { remoteStream } = useWebRTC({
       userRole: role,
@@ -222,13 +231,13 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
                              <Icons.PhoneX /> 
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans">
+                    <div ref={transcriptRef} className="flex-1 overflow-y-auto p-4 space-y-4 font-sans">
                         {transcripts.length === 0 && (
                             <p className="text-center text-gray-400 text-sm mt-10 italic">Conversation will appear here...</p>
                         )}
                         {transcripts.map((t) => (
                             <div key={t.id} className={`flex flex-col ${t.sender === (role === 'CUSTOMER' ? 'Client' : 'Agent') ? 'items-end' : 'items-start'}`}>
-                                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+                                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
                                     t.isTranslation 
                                         ? 'bg-[#FFCC00]/10 border border-[#FFCC00]/20 text-gray-800' 
                                         : 'bg-gray-100 text-gray-600'
