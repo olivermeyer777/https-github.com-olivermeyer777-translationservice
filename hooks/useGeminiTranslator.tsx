@@ -7,9 +7,9 @@ import { base64ToUint8Array, decodeAudioData } from '../utils/audio';
 
 interface UseGeminiTranslatorProps {
   userLanguage: Language;
-  targetLanguage: Language;
   userRole: UserRole;
-  customerId: string;
+  audioInputDeviceId?: string;
+  audioOutputDeviceId?: string;
 }
 
 export interface TranscriptItem {
@@ -19,9 +19,10 @@ export interface TranscriptItem {
   isTranslation: boolean;
 }
 
-export const useGeminiTranslator = ({ userLanguage, targetLanguage, userRole, customerId }: UseGeminiTranslatorProps) => {
+export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId, audioOutputDeviceId }: UseGeminiTranslatorProps) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [targetLanguage, setTargetLanguage] = useState<Language | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   
@@ -39,6 +40,15 @@ export const useGeminiTranslator = ({ userLanguage, targetLanguage, userRole, cu
         }
 
         const ctx = audioContextRef.current;
+        
+        // Handle Output Device selection if supported
+        if (audioOutputDeviceId && (ctx as any).setSinkId) {
+            // This is experimental in some browsers
+             try {
+                await (ctx as any).setSinkId(audioOutputDeviceId);
+             } catch(e) { console.warn("Cannot set sinkId on AudioContext", e); }
+        }
+
         const audioBytes = base64ToUint8Array(base64Data);
         const audioBuffer = await decodeAudioData(audioBytes, ctx);
         
@@ -53,21 +63,27 @@ export const useGeminiTranslator = ({ userLanguage, targetLanguage, userRole, cu
     } catch (e) {
         console.error("Error playing remote audio", e);
     }
-  }, []);
+  }, [audioOutputDeviceId]);
 
-  // Listen for signals from the other tab
+  // Signaling: Handle Room Events
   useEffect(() => {
-    const cleanup = signaling.subscribe((msg: SignalingMessage) => {
-        if (msg.customerId !== customerId) return;
+    // Announce ourselves when we join or when we change target language logic
+    signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
 
-        // If we receive audio from the OTHER role, play it.
-        // E.g. If I am Customer, and I receive audio from AGENT, I play it.
+    const cleanup = signaling.subscribe((msg: SignalingMessage) => {
+        if (msg.type === 'JOIN_ROOM') {
+            if (msg.role !== userRole) {
+                // Found our partner!
+                setTargetLanguage(msg.language);
+                // Resend our info so they know about us too
+                signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
+            }
+        }
+
         if (msg.type === 'AUDIO_CHUNK' && msg.senderRole !== userRole) {
             playAudio(msg.data);
         }
 
-        // If we receive a transcript, add it.
-        // We filter out our own broadcasts to avoid duplicates (we add them locally when generated)
         if (msg.type === 'TRANSCRIPT' && msg.senderRole !== userRole) {
              setTranscripts(prev => [
                 ...prev,
@@ -81,73 +97,70 @@ export const useGeminiTranslator = ({ userLanguage, targetLanguage, userRole, cu
         }
     });
     return cleanup;
-  }, [customerId, userRole, playAudio]);
+  }, [userRole, userLanguage, playAudio]);
 
-  const connect = useCallback(async () => {
-    if (isConnecting || isConnected) return;
-    
-    setIsConnecting(true);
-    setError(null);
-    setTranscripts([]);
+  // Connect to Gemini ONLY when we have a target language
+  useEffect(() => {
+    if (!targetLanguage || isConnected || isConnecting) return;
 
-    const service = new GeminiLiveService();
-    serviceRef.current = service;
+    const start = async () => {
+        setIsConnecting(true);
+        setError(null);
 
-    try {
-      await service.connect({
-        userLanguage: userLanguage.geminiName,
-        targetLanguage: targetLanguage.geminiName,
-        userRole: userRole,
-        // When Gemini translates OUR speech, we get audio data.
-        // We DO NOT play this locally. We broadcast it to the other person.
-        onAudioData: (base64Audio) => {
-            signaling.send({
-                type: 'AUDIO_CHUNK',
-                customerId,
-                senderRole: userRole,
-                data: base64Audio
+        const service = new GeminiLiveService();
+        serviceRef.current = service;
+
+        try {
+            await service.connect({
+                userLanguage: userLanguage.geminiName,
+                targetLanguage: targetLanguage.geminiName,
+                userRole: userRole,
+                audioInputDeviceId,
+                // On Audio Data (Translation of MY voice): Broadcast to other
+                onAudioData: (base64Audio) => {
+                    signaling.send({
+                        type: 'AUDIO_CHUNK',
+                        senderRole: userRole,
+                        data: base64Audio
+                    });
+                },
+                onTranscript: (text, isInput) => {
+                    // Log locally and broadcast
+                    const newItem: TranscriptItem = {
+                        id: Date.now() + Math.random(),
+                        text,
+                        sender: userRole === 'CUSTOMER' ? 'Client' : 'Agent',
+                        isTranslation: !isInput
+                    };
+                    setTranscripts(prev => [...prev, newItem].slice(-50));
+                    
+                    signaling.send({
+                        type: 'TRANSCRIPT',
+                        senderRole: userRole,
+                        text: text,
+                        isTranslation: !isInput
+                    });
+                },
+                onClose: () => {
+                    setIsConnected(false);
+                    setIsConnecting(false);
+                },
+                onError: (err) => {
+                    setError(err.message);
+                    setIsConnected(false);
+                    setIsConnecting(false);
+                }
             });
-        },
-        onTranscript: (text, isInput) => {
-           // isInput = What I said (Source Lang)
-           // !isInput = What Gemini said (Translated Lang)
-           
-           const newItem: TranscriptItem = {
-               id: Date.now() + Math.random(),
-               text,
-               sender: userRole === 'CUSTOMER' ? 'Client' : 'Agent',
-               isTranslation: !isInput
-           };
-
-           // 1. Add locally
-           setTranscripts(prev => [...prev, newItem].slice(-50));
-
-           // 2. Broadcast to other tab
-           signaling.send({
-               type: 'TRANSCRIPT',
-               customerId,
-               senderRole: userRole,
-               text: text,
-               isTranslation: !isInput
-           });
-        },
-        onClose: () => {
-          setIsConnected(false);
-          setIsConnecting(false);
-        },
-        onError: (err) => {
-          setError(err.message);
-          setIsConnected(false);
-          setIsConnecting(false);
+            setIsConnected(true);
+        } catch(e) {
+            setError("Failed to connect to Translator");
+        } finally {
+            setIsConnecting(false);
         }
-      });
-      setIsConnected(true);
-    } catch (e) {
-      setError("Failed to start session.");
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [userLanguage, targetLanguage, userRole, customerId, isConnecting, isConnected]);
+    };
+
+    start();
+  }, [targetLanguage, userLanguage, userRole, isConnected, isConnecting, audioInputDeviceId]);
 
   const disconnect = useCallback(() => {
     if (serviceRef.current) {
@@ -159,19 +172,19 @@ export const useGeminiTranslator = ({ userLanguage, targetLanguage, userRole, cu
       audioContextRef.current = null;
     }
     setIsConnected(false);
+    setTargetLanguage(null);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      disconnect();
-    };
-  }, [disconnect]);
+  const connect = useCallback(() => {
+      // Connect is handled automatically by the effect above when targetLanguage is set
+  }, []);
 
   return {
-    connect,
+    connect, // Actually handled automatically by effect now, but kept for interface compatibility
     disconnect,
     isConnected,
     isConnecting,
+    targetLanguage,
     error,
     transcripts
   };

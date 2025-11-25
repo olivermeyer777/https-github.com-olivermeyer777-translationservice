@@ -1,19 +1,17 @@
 
-import { Language } from '../types';
+import { Language, UserRole } from '../types';
 
 export type SignalingMessage = 
-  | { type: 'CALL_STARTED'; customerId: string; language: Language }
-  | { type: 'CALL_ACCEPTED'; customerId: string; agentLanguage: Language }
-  | { type: 'CALL_ENDED'; customerId: string }
-  | { type: 'AUDIO_CHUNK'; customerId: string; senderRole: 'CUSTOMER' | 'AGENT'; data: string } // Base64 Audio
-  | { type: 'TRANSCRIPT'; customerId: string; senderRole: 'CUSTOMER' | 'AGENT'; text: string; isTranslation: boolean };
+  | { type: 'JOIN_ROOM'; role: UserRole; language: Language }
+  | { type: 'AUDIO_CHUNK'; senderRole: UserRole; data: string } // Base64 Audio
+  | { type: 'TRANSCRIPT'; senderRole: UserRole; text: string; isTranslation: boolean };
 
 class SignalingService {
   private channel: BroadcastChannel;
   private listeners: ((msg: SignalingMessage) => void)[] = [];
 
   constructor() {
-    this.channel = new BroadcastChannel('postbranch_connect_channel');
+    this.channel = new BroadcastChannel('postbranch_room_v2');
     this.channel.onmessage = (event) => {
       this.listeners.forEach(l => l(event.data));
     };

@@ -1,11 +1,8 @@
 
 export enum AppState {
   LANDING = 'LANDING',
-  CUSTOMER_LANGUAGE = 'CUSTOMER_LANGUAGE',
-  CUSTOMER_WAITING = 'CUSTOMER_WAITING',
-  AGENT_SETUP = 'AGENT_SETUP',
-  AGENT_DASHBOARD = 'AGENT_DASHBOARD',
-  SESSION = 'SESSION',
+  LANGUAGE_SELECTION = 'LANGUAGE_SELECTION',
+  ROOM = 'ROOM',
 }
 
 export interface Language {
@@ -20,8 +17,14 @@ export enum UserRole {
   AGENT = 'AGENT',
 }
 
-export interface IncomingCall {
-  id: string;
-  language: Language;
-  timestamp: number;
+export interface DeviceConfig {
+  videoInputId: string;
+  audioInputId: string;
+  audioOutputId: string;
+}
+
+export interface MediaDevice {
+  deviceId: string;
+  label: string;
+  kind: MediaDeviceKind;
 }

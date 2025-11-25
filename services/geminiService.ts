@@ -1,11 +1,12 @@
 
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audio';
+import { createPcmBlob } from '../utils/audio';
 
 interface ConnectOptions {
   userLanguage: string;
   targetLanguage: string;
   userRole: 'CUSTOMER' | 'AGENT';
+  audioInputDeviceId?: string; // Specific Mic
   onAudioData: (base64Audio: string) => void;
   onClose: () => void;
   onError: (error: Error) => void;
@@ -30,19 +31,18 @@ export class GeminiLiveService {
     
     // Strict Translator Role
     const systemInstruction = `
-      You are a real-time voice translator acting as an intermediary.
+      You are a real-time voice translator.
       
       User Context:
-      - You are listening to the ${options.userRole}.
-      - The ${options.userRole} speaks ${options.userLanguage}.
-      - The other party speaks ${options.targetLanguage}.
+      - Input Source: ${options.userRole} speaking ${options.userLanguage}.
+      - Target Audience: Speaking ${options.targetLanguage}.
 
       Your Task:
-      1. Listen to the input audio (in ${options.userLanguage}).
+      1. Listen to the ${options.userLanguage} audio.
       2. Translate it immediately into ${options.targetLanguage}.
       3. Output ONLY the spoken translation. 
-      4. DO NOT reply to the user. DO NOT answer questions. DO NOT say "Okay" or "Translated:".
-      5. Just repeat what was said in the target language.
+      4. DO NOT engage in conversation.
+      5. DO NOT translate silence or background noise.
     `;
 
     try {
@@ -60,14 +60,12 @@ export class GeminiLiveService {
         callbacks: {
             onopen: async () => {
                 console.log("Gemini Live Connected");
-                await this.startMicrophone();
+                await this.startMicrophone(options.audioInputDeviceId);
             },
             onmessage: async (message: LiveServerMessage) => {
                 // Handle Audio
                 const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                 if (base64Audio) {
-                    // We DO NOT decode here. We pass the raw base64 to the hook.
-                    // The hook will broadcast it to the other tab.
                     options.onAudioData(base64Audio);
                 }
 
@@ -97,10 +95,14 @@ export class GeminiLiveService {
     }
   }
 
-  private async startMicrophone() {
+  private async startMicrophone(deviceId?: string) {
     try {
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      this.stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: deviceId ? { deviceId: { exact: deviceId } } : true
+      });
+      
       this.source = this.inputAudioContext.createMediaStreamSource(this.stream);
       this.processor = this.inputAudioContext.createScriptProcessor(4096, 1, 1);
 

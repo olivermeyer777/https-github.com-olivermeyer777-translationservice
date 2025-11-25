@@ -1,29 +1,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AppState, Language, UserRole, IncomingCall } from './types';
+import { AppState, Language, UserRole } from './types';
 import { DEFAULT_AGENT_LANGUAGE, DEFAULT_CUSTOMER_LANGUAGE } from './constants';
 import { Button } from './components/Button';
 import { LanguageSelector } from './components/LanguageSelector';
-import { useGeminiTranslator, TranscriptItem } from './hooks/useGeminiTranslator';
+import { useGeminiTranslator } from './hooks/useGeminiTranslator';
 import { Visualizer } from './components/Visualizer';
-import { signaling, SignalingMessage } from './services/signalingService';
+import { useMediaDevices } from './hooks/useMediaDevices';
+import { SettingsModal } from './components/SettingsModal';
 
 // --- ICONS ---
 const PhoneXMarkIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 3.75 18 6m0 0 2.25 2.25M18 6l2.25-2.25M18 6l-2.25 2.25m-10.5-2.393c5.142-6.685 15.245-1.977 15.245 6.643 0 2.657-1.42 5.06-3.616 6.368-2.673 1.593-5.22-.44-6.49-1.996-1.27-1.555-3.818-3.564-6.49-1.996-2.195 1.309-3.616 3.712-3.616 6.368 0 8.62 10.103 13.328 15.245 6.642" />
-  </svg>
-);
-
-const UserGroupIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 5.472m0 0a9.09 9.09 0 0 0-3.279 3.298m.944-5.464A6.001 6.001 0 0 1 12.001 15c.767 0 1.516.146 2.203.413m-2.203-9.502 1.134 4.536a1.06 1.06 0 0 1-.375 1.168L11.5 13.5l-3.328-3.329 1.933-1.933a1.06 1.06 0 0 1 1.167-.375l4.537 1.134Z" />
-  </svg>
-);
-
-const GlobeIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418" />
   </svg>
 );
 
@@ -39,9 +28,10 @@ const ChatBubbleLeftRightIcon = () => (
     </svg>
 );
 
-const ChevronRightIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+const Cog6ToothIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
   </svg>
 );
 
@@ -57,11 +47,11 @@ export default function App() {
   }, []);
 
   if (role === 'customer') {
-    return <CustomerApp />;
+    return <UnifiedApp role={UserRole.CUSTOMER} />;
   }
 
   if (role === 'agent') {
-    return <AgentApp />;
+    return <UnifiedApp role={UserRole.AGENT} />;
   }
 
   return <Launcher />;
@@ -86,7 +76,7 @@ function Launcher() {
              </span>
              <span className="text-5xl font-light text-gray-400 ml-2">Connect</span>
           </div>
-          <h1 className="text-2xl font-medium text-gray-500">Development Environment</h1>
+          <h1 className="text-2xl font-medium text-gray-500">Video Translation Room</h1>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8">
@@ -98,7 +88,7 @@ function Launcher() {
               </div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Customer Kiosk</h2>
               <p className="text-gray-500 mb-8 leading-relaxed">
-                Simulates the touch-screen interface at the postal branch. Includes language selection and waiting room experience.
+                Join the room as a Customer. Select your language and connect instantly.
               </p>
               <div className="mt-auto">
                 <Button onClick={() => openApp('customer')} fullWidth size="lg" icon={<ExternalLinkIcon />}>
@@ -116,7 +106,7 @@ function Launcher() {
               </div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Agent Portal</h2>
               <p className="text-gray-500 mb-8 leading-relaxed">
-                Simulates the desktop dashboard for support agents. Features real-time call queue and session management.
+                Join the room as an Agent. Select your language and connect instantly.
               </p>
               <div className="mt-auto">
                 <Button onClick={() => openApp('agent')} variant="secondary" fullWidth size="lg" icon={<ExternalLinkIcon />}>
@@ -126,128 +116,90 @@ function Launcher() {
             </div>
           </div>
         </div>
-        
-        <div className="mt-16 flex justify-center items-center gap-2 text-sm text-gray-400">
-          <div className="h-1 w-1 bg-gray-400 rounded-full"></div>
-          <p>Powered by Gemini 2.5 Live API</p>
-          <div className="h-1 w-1 bg-gray-400 rounded-full"></div>
-        </div>
       </div>
     </div>
   );
 }
 
-// --- CUSTOMER APP ---
+// --- UNIFIED APP (Customer & Agent share same structure now) ---
 
-function CustomerApp() {
-  const [appState, setAppState] = useState<AppState>(AppState.CUSTOMER_LANGUAGE);
-  const [myLanguage, setMyLanguage] = useState<Language>(DEFAULT_CUSTOMER_LANGUAGE);
-  const [targetLanguage, setTargetLanguage] = useState<Language>(DEFAULT_AGENT_LANGUAGE);
-  const [customerId] = useState<string>(() => Math.random().toString(36).substring(7));
+function UnifiedApp({ role }: { role: UserRole }) {
+  const [appState, setAppState] = useState<AppState>(AppState.LANGUAGE_SELECTION);
+  const [myLanguage, setMyLanguage] = useState<Language>(
+    role === UserRole.CUSTOMER ? DEFAULT_CUSTOMER_LANGUAGE : DEFAULT_AGENT_LANGUAGE
+  );
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  // Media Devices
+  const { devices, config, setConfig, activeStream } = useMediaDevices();
 
-  useEffect(() => {
-    const cleanup = signaling.subscribe((msg: SignalingMessage) => {
-      if (msg.type === 'CALL_ACCEPTED' && msg.customerId === customerId) {
-        setTargetLanguage(msg.agentLanguage);
-        setAppState(AppState.SESSION);
-      }
-      if (msg.type === 'CALL_ENDED' && msg.customerId === customerId) {
-        setAppState(AppState.CUSTOMER_LANGUAGE);
-      }
-    });
-    return cleanup;
-  }, [customerId]);
-
-  const selectLanguage = (lang: Language) => {
+  const handleLanguageSelect = (lang: Language) => {
     setMyLanguage(lang);
-    setAppState(AppState.CUSTOMER_WAITING);
-    signaling.send({
-      type: 'CALL_STARTED',
-      customerId: customerId,
-      language: lang
-    });
+    setAppState(AppState.ROOM);
   };
 
-  const endSession = () => {
-    signaling.send({ type: 'CALL_ENDED', customerId });
-    setAppState(AppState.CUSTOMER_LANGUAGE);
+  const handleLeaveRoom = () => {
+    setAppState(AppState.LANGUAGE_SELECTION);
   };
+
+  const isCustomer = role === UserRole.CUSTOMER;
+  const themeColor = isCustomer ? 'yellow' : 'blue';
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-gray-900 overflow-hidden flex flex-col">
-      {/* MODERN HEADER */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+      {/* HEADER */}
+      <div className="bg-white/90 backdrop-blur-md border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-3">
-            <div className="bg-yellow-400 text-gray-900 w-10 h-10 rounded-xl shadow-lg shadow-yellow-400/30 flex items-center justify-center font-bold text-lg">
-                P
+            <div className={`text-white w-10 h-10 rounded-xl shadow-lg flex items-center justify-center font-bold text-lg ${isCustomer ? 'bg-yellow-400 shadow-yellow-400/30' : 'bg-blue-600 shadow-blue-600/30'}`}>
+                {isCustomer ? 'C' : 'A'}
             </div>
-            <span className="font-bold text-xl tracking-tight text-gray-800">PostBranch</span>
+            <div>
+                 <span className="font-bold text-xl tracking-tight text-gray-800 block leading-none">PostBranch</span>
+                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{isCustomer ? 'Customer Kiosk' : 'Agent Portal'}</span>
+            </div>
         </div>
-        <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">
-             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-             <span className="text-xs font-medium text-gray-500 font-mono">ID: {customerId}</span>
+        
+        <div className="flex items-center gap-3">
+            <button 
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+            >
+                <Cog6ToothIcon />
+            </button>
         </div>
       </div>
 
-      {/* CONTENT AREA */}
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        devices={devices}
+        config={config}
+        setConfig={setConfig}
+      />
+
+      {/* CONTENT */}
       <div className="flex-1 flex flex-col relative">
-        {appState === AppState.CUSTOMER_LANGUAGE && (
+        {appState === AppState.LANGUAGE_SELECTION && (
           <div className="flex-1 flex items-center justify-center p-6">
-            <div className="max-w-3xl w-full">
-              <div className="text-center mb-10 animate-fade-in-up">
-                <h2 className="text-4xl font-bold text-gray-900 mb-4">Welcome / Willkommen</h2>
-                <p className="text-xl text-gray-500">Please select your preferred language to start.</p>
+            <div className="max-w-3xl w-full animate-fade-in-up">
+              <div className="text-center mb-10">
+                <h2 className="text-4xl font-bold text-gray-900 mb-4">Select Your Language</h2>
+                <p className="text-xl text-gray-500">Choose the language you will be speaking.</p>
               </div>
-              <div className="bg-white rounded-[2rem] shadow-2xl shadow-gray-200/50 p-8 md:p-12 border border-gray-100 animate-fade-in-up delay-100">
-                <LanguageSelector onSelect={selectLanguage} />
+              <div className="bg-white rounded-[2rem] shadow-2xl shadow-gray-200/50 p-8 md:p-12 border border-gray-100">
+                <LanguageSelector onSelect={handleLanguageSelect} selectedLang={myLanguage} />
               </div>
             </div>
           </div>
         )}
 
-        {appState === AppState.CUSTOMER_WAITING && (
-           <div className="absolute inset-0 bg-slate-900 text-white flex flex-col items-center justify-center overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-slate-950"></div>
-              
-              {/* Animated Background Rings */}
-              <div className="absolute w-[600px] h-[600px] border border-white/5 rounded-full animate-[spin_10s_linear_infinite]"></div>
-              <div className="absolute w-[400px] h-[400px] border border-white/10 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
-
-              <div className="relative z-10 flex flex-col items-center max-w-md px-6 text-center">
-                  <div className="relative mb-12">
-                      <div className="absolute inset-0 bg-yellow-400 rounded-full animate-ping opacity-20"></div>
-                      <div className="w-24 h-24 bg-gradient-to-tr from-yellow-400 to-yellow-300 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(250,204,21,0.4)] relative z-10">
-                          <span className="text-4xl">📞</span>
-                      </div>
-                  </div>
-                  
-                  <h2 className="text-4xl font-bold mb-4">Connecting...</h2>
-                  <p className="text-lg text-gray-400 mb-8">We are looking for an available agent who speaks <span className="text-white font-semibold">{myLanguage.name}</span>.</p>
-                  
-                  <div className="flex flex-col items-center gap-6 w-full">
-                      <div className="flex items-center gap-3 px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/10">
-                          <span className="text-2xl">{myLanguage.flag}</span>
-                          <span className="font-medium text-white">{myLanguage.name}</span>
-                      </div>
-                      
-                      <button 
-                          onClick={endSession} 
-                          className="mt-4 text-sm text-gray-500 hover:text-white transition-colors uppercase tracking-widest font-semibold"
-                      >
-                          Cancel Request
-                      </button>
-                  </div>
-              </div>
-           </div>
-        )}
-
-        {appState === AppState.SESSION && (
+        {appState === AppState.ROOM && (
           <SessionView 
-              userRole={UserRole.CUSTOMER}
-              customerId={customerId}
-              myLanguage={myLanguage}
-              targetLanguage={targetLanguage}
-              onEndCall={endSession}
+            userRole={role}
+            myLanguage={myLanguage}
+            onLeave={handleLeaveRoom}
+            activeStream={activeStream}
+            deviceConfig={config}
           />
         )}
       </div>
@@ -255,211 +207,42 @@ function CustomerApp() {
   );
 }
 
-// --- AGENT APP ---
-
-function AgentApp() {
-  const [appState, setAppState] = useState<AppState>(AppState.AGENT_SETUP);
-  const [myLanguage, setMyLanguage] = useState<Language>(DEFAULT_AGENT_LANGUAGE);
-  const [targetLanguage, setTargetLanguage] = useState<Language>(DEFAULT_CUSTOMER_LANGUAGE);
-  const [callQueue, setCallQueue] = useState<IncomingCall[]>([]);
-  const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const cleanup = signaling.subscribe((msg: SignalingMessage) => {
-      if (msg.type === 'CALL_STARTED') {
-        setCallQueue(prev => {
-            if (prev.find(c => c.id === msg.customerId)) return prev;
-            return [...prev, { id: msg.customerId, language: msg.language, timestamp: Date.now() }];
-        });
-      }
-      if (msg.type === 'CALL_ENDED') {
-        setCallQueue(prev => prev.filter(c => c.id !== msg.customerId));
-        if (msg.customerId === activeCustomerId) {
-            setAppState(AppState.AGENT_DASHBOARD);
-            setActiveCustomerId(null);
-        }
-      }
-    });
-    return cleanup;
-  }, [activeCustomerId]);
-
-  const completeSetup = (lang: Language) => {
-    setMyLanguage(lang);
-    setAppState(AppState.AGENT_DASHBOARD);
-  };
-
-  const acceptCall = (call: IncomingCall) => {
-    setTargetLanguage(call.language);
-    setActiveCustomerId(call.id);
-    setCallQueue(prev => prev.filter(c => c.id !== call.id));
-    signaling.send({
-        type: 'CALL_ACCEPTED',
-        customerId: call.id,
-        agentLanguage: myLanguage
-    });
-    setAppState(AppState.SESSION);
-  };
-
-  const endSession = () => {
-      if (activeCustomerId) {
-        signaling.send({ type: 'CALL_ENDED', customerId: activeCustomerId });
-      }
-      setAppState(AppState.AGENT_DASHBOARD);
-      setActiveCustomerId(null);
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-gray-900 flex flex-col">
-       {/* HEADER */}
-       <header className="bg-white border-b border-gray-200 px-8 py-5 flex justify-between items-center z-20 shadow-sm">
-          <div className="flex items-center gap-4">
-              <div className="bg-blue-600 text-white p-2.5 rounded-xl shadow-lg shadow-blue-600/20">
-                  <UserGroupIcon />
-              </div>
-              <div>
-                  <h1 className="font-bold text-xl text-gray-900 leading-none">Agent Portal</h1>
-                  <p className="text-xs text-gray-500 mt-1 font-medium tracking-wide">GLOBAL SUPPORT TEAM</p>
-              </div>
-          </div>
-          
-          {appState !== AppState.AGENT_SETUP && (
-            <div className="flex items-center gap-3 bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
-                <div className="relative">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 block"></span>
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 block absolute inset-0 animate-ping opacity-75"></span>
-                </div>
-                <span className="text-sm font-semibold text-gray-700">{myLanguage.name} Speaker</span>
-            </div>
-          )}
-      </header>
-
-      {appState === AppState.AGENT_SETUP && (
-        <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
-           <div className="bg-white max-w-xl w-full rounded-[2rem] shadow-xl shadow-slate-200 border border-white p-10">
-              <h2 className="text-3xl font-bold mb-3 text-gray-800">Agent Login</h2>
-              <p className="text-gray-500 mb-8">Select your primary language to enter the queue.</p>
-              <div className="h-[400px] overflow-y-auto pr-2 -mr-2 custom-scrollbar">
-                 <LanguageSelector onSelect={completeSetup} />
-              </div>
-           </div>
-        </div>
-      )}
-
-      {appState === AppState.AGENT_DASHBOARD && (
-        <div className="flex-1 p-8 md:p-12 max-w-7xl mx-auto w-full">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Stats Column */}
-                <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Status</h3>
-                        <div className="flex items-center gap-2 text-green-600 font-bold text-lg">
-                            <span className="w-2 h-2 bg-green-600 rounded-full"></span>
-                            Online & Ready
-                        </div>
-                    </div>
-                     <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-3xl shadow-xl shadow-blue-600/20 text-white">
-                        <h3 className="text-blue-100 font-medium mb-2">Waiting Queue</h3>
-                        <div className="text-5xl font-bold mb-4">{callQueue.length}</div>
-                        <p className="text-sm text-blue-200">Customers currently waiting for assistance in {myLanguage.name} or other languages.</p>
-                    </div>
-                </div>
-
-                {/* Queue Column */}
-                <div className="lg:col-span-2">
-                    <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                        Incoming Calls
-                        {callQueue.length > 0 && (
-                            <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">{callQueue.length}</span>
-                        )}
-                    </h3>
-                    
-                    <div className="space-y-4">
-                        {callQueue.length === 0 ? (
-                            <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-200 opacity-75">
-                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
-                                    <GlobeIcon />
-                                </div>
-                                <p className="text-gray-500 font-medium">No calls in queue</p>
-                            </div>
-                        ) : (
-                            callQueue.map((call) => (
-                                <div key={call.id} className="bg-white p-6 rounded-2xl shadow-md border border-gray-100 hover:shadow-lg hover:border-blue-200 transition-all duration-300 flex flex-col sm:flex-row items-center justify-between gap-6 group">
-                                    <div className="flex items-center gap-5 w-full sm:w-auto">
-                                        <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl shadow-inner">
-                                            {call.language.flag}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h4 className="font-bold text-gray-900 text-lg">Customer</h4>
-                                                <span className="text-xs font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">#{call.id.substring(0,3)}</span>
-                                            </div>
-                                            <div className="text-sm text-gray-500 mt-1">
-                                                Language Request: <span className="font-semibold text-gray-800">{call.language.name}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="w-full sm:w-auto">
-                                        <Button 
-                                            variant="primary" 
-                                            size="md"
-                                            fullWidth
-                                            onClick={() => acceptCall(call)}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-600/20"
-                                        >
-                                            Accept Call
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {appState === AppState.SESSION && activeCustomerId && (
-         <SessionView 
-            userRole={UserRole.AGENT}
-            customerId={activeCustomerId}
-            myLanguage={myLanguage}
-            targetLanguage={targetLanguage}
-            onEndCall={endSession}
-         />
-      )}
-    </div>
-  );
-}
-
-// --- SHARED SESSION COMPONENT ---
+// --- SESSION VIEW ---
 
 function SessionView({ 
     userRole,
-    customerId,
     myLanguage, 
-    targetLanguage, 
-    onEndCall 
+    onLeave,
+    activeStream,
+    deviceConfig
 }: { 
     userRole: UserRole,
-    customerId: string,
     myLanguage: Language, 
-    targetLanguage: Language, 
-    onEndCall: () => void 
+    onLeave: () => void,
+    activeStream: MediaStream | null,
+    deviceConfig: any
 }) {
     const { 
-        connect, 
         disconnect, 
         isConnected, 
-        error, 
+        targetLanguage,
         transcripts 
-    } = useGeminiTranslator({ userLanguage: myLanguage, targetLanguage: targetLanguage, userRole, customerId });
+    } = useGeminiTranslator({ 
+        userLanguage: myLanguage, 
+        userRole, 
+        audioInputDeviceId: deviceConfig.audioInputId,
+        audioOutputDeviceId: deviceConfig.audioOutputId
+    });
     
     const [isSubtitlesOpen, setIsSubtitlesOpen] = useState(true);
+    const localVideoRef = useRef<HTMLVideoElement>(null);
 
+    // Attach local stream to video element
     useEffect(() => {
-        connect();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        if (localVideoRef.current && activeStream) {
+            localVideoRef.current.srcObject = activeStream;
+        }
+    }, [activeStream]);
 
     const transcriptRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
@@ -469,50 +252,79 @@ function SessionView({
     }, [transcripts]);
 
     const isAgent = userRole === UserRole.AGENT;
-    const remoteLabel = isAgent ? 'Customer' : 'Support Agent';
     
+    // In this "Room" model, we simulate the remote user with an avatar, 
+    // but the LOCAL video is shown to prove device access.
+    const remoteLabel = isAgent ? 'Customer' : 'Support Agent';
     const remoteImg = isAgent 
-        ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80' // Customer image
-        : 'https://images.unsplash.com/photo-1560250097-0b93528c311a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80'; // Agent image
+        ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80' 
+        : 'https://images.unsplash.com/photo-1560250097-0b93528c311a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80';
 
     return (
-        <div className="flex-1 flex flex-row overflow-hidden h-screen relative bg-gray-900">
+        <div className="flex-1 flex flex-row overflow-hidden h-[calc(100vh-80px)] relative bg-gray-900">
             
-            {/* Main Video Area */}
-            <div className={`flex-1 relative flex flex-col justify-center bg-black overflow-hidden group transition-all duration-300`}>
-                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 z-10 pointer-events-none"></div>
+            {/* Main Video Area (The "Room") */}
+            <div className={`flex-1 relative flex flex-col justify-center bg-black overflow-hidden group`}>
                 
-                <img 
-                    src={remoteImg}
-                    alt="Remote User" 
-                    className="w-full h-full object-cover opacity-90 transition-transform duration-1000 hover:scale-105"
-                />
-                
-                {/* Top Badge */}
-                <div className="absolute top-8 left-8 right-8 flex justify-between items-start z-20">
-                    <div className="bg-white/10 backdrop-blur-xl border border-white/10 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
-                         <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-xl shadow-inner">
-                             {targetLanguage.flag}
-                         </div>
-                         <div>
-                             <div className="text-xs text-gray-300 uppercase font-bold tracking-wider opacity-80">Connected to</div>
-                             <div className="font-bold text-lg leading-none">{remoteLabel}</div>
-                         </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 bg-red-500/90 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
-                        <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                        Live
-                    </div>
+                {/* 1. REMOTE USER (Simulated Avatar for Demo) */}
+                <div className="absolute inset-0 z-0">
+                    <img 
+                        src={remoteImg}
+                        alt="Remote User" 
+                        className={`w-full h-full object-cover transition-all duration-1000 ${targetLanguage ? 'opacity-100 scale-100' : 'opacity-40 scale-105 blur-sm'}`}
+                    />
+                     <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80"></div>
                 </div>
 
-                {/* PIP (Local Cam) */}
-                <div className="absolute bottom-24 right-8 w-48 md:w-64 aspect-[4/3] bg-gray-800 rounded-2xl overflow-hidden border-[3px] border-white/20 shadow-2xl z-20 hover:scale-105 transition-transform duration-300">
-                    <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center relative">
-                        <span className="text-xs text-white/50 font-medium uppercase tracking-widest">My Camera</span>
-                        <div className="absolute bottom-4 left-0 right-0 flex justify-center">
-                            <Visualizer isActive={isConnected} />
+                {/* Status Overlay */}
+                {!targetLanguage && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10 flex-col animate-pulse">
+                        <div className="bg-black/40 backdrop-blur-md px-8 py-4 rounded-full border border-white/10 text-white font-medium flex items-center gap-3">
+                            <span className="w-3 h-3 bg-yellow-400 rounded-full animate-bounce"></span>
+                            Waiting for partner to join room...
                         </div>
+                    </div>
+                )}
+
+                {/* Top Badge */}
+                {targetLanguage && (
+                    <div className="absolute top-8 left-8 right-8 flex justify-between items-start z-20 animate-fade-in">
+                        <div className="bg-white/10 backdrop-blur-xl border border-white/10 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-xl shadow-inner">
+                                {targetLanguage.flag}
+                            </div>
+                            <div>
+                                <div className="text-xs text-gray-300 uppercase font-bold tracking-wider opacity-80">Speaking</div>
+                                <div className="font-bold text-lg leading-none">{targetLanguage.name}</div>
+                            </div>
+                        </div>
+                        
+                        {isConnected && (
+                            <div className="flex items-center gap-2 bg-red-500/90 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
+                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                                Live Translation
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 2. LOCAL USER (Real Camera) - Picture in Picture */}
+                <div className="absolute bottom-32 right-8 w-48 md:w-64 aspect-video bg-gray-800 rounded-2xl overflow-hidden border-[3px] border-white/20 shadow-2xl z-20 hover:scale-105 transition-transform duration-300 group-hover:border-yellow-400/50">
+                    {activeStream ? (
+                        <video 
+                            ref={localVideoRef} 
+                            autoPlay 
+                            muted 
+                            playsInline
+                            className="w-full h-full object-cover transform scale-x-[-1]" // Mirror effect
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-900 text-gray-500 text-xs uppercase tracking-widest">
+                            Camera Off
+                        </div>
+                    )}
+                    <div className="absolute bottom-2 left-2 flex items-center gap-2">
+                        <Visualizer isActive={isConnected} />
                     </div>
                 </div>
 
@@ -521,20 +333,16 @@ function SessionView({
                      <button 
                         onClick={() => setIsSubtitlesOpen(!isSubtitlesOpen)}
                         className={`w-14 h-14 rounded-full backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-white/20 transition-colors ${isSubtitlesOpen ? 'bg-white/30' : 'bg-white/10'}`}
+                        title="Toggle Transcript"
                      >
                         <ChatBubbleLeftRightIcon />
                      </button>
                      <button 
-                        onClick={() => { disconnect(); onEndCall(); }}
+                        onClick={() => { disconnect(); onLeave(); }}
                         className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-full shadow-lg shadow-red-500/40 transition-all hover:scale-110 active:scale-95 flex items-center justify-center w-16 h-16 ring-4 ring-red-500/20"
+                        title="Leave Room"
                     >
                         <PhoneXMarkIcon />
-                    </button>
-                    <button className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-white/20 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
-                          <path d="M7 4a3 3 0 0 1 6 0v6a3 3 0 1 1-6 0V4Z" />
-                          <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.546A6.001 6.001 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
-                        </svg>
                     </button>
                 </div>
             </div>
@@ -544,25 +352,15 @@ function SessionView({
                 ${isSubtitlesOpen ? 'w-[400px] translate-x-0' : 'w-0 translate-x-full opacity-0'} 
                 transition-all duration-500 ease-in-out bg-white border-l border-gray-200 flex flex-col z-20 shadow-2xl h-full absolute right-0 lg:relative
             `}>
-                {/* Header */}
                 <div className="p-6 border-b border-gray-100 bg-white/95 backdrop-blur flex-shrink-0">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-gray-800">Live Transcript</h3>
-                        </div>
-                        {isConnected && <span className="text-xs font-bold text-green-500 bg-green-50 px-2 py-1 rounded-full border border-green-100">ACTIVE</span>}
-                    </div>
+                    <h3 className="font-bold text-gray-800">Live Transcript</h3>
                 </div>
 
-                {/* Chat Body */}
-                <div 
-                    ref={transcriptRef} 
-                    className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50"
-                >
+                <div ref={transcriptRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50">
                     {transcripts.length === 0 && (
                         <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 px-8">
-                             <p className="text-sm font-medium">Conversation started.</p>
-                             <p className="text-xs mt-2">Speak to see real-time translation.</p>
+                             <p className="text-sm font-medium">Room Ready.</p>
+                             <p className="text-xs mt-2">Waiting for speech...</p>
                         </div>
                     )}
 
