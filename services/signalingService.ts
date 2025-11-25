@@ -2,6 +2,7 @@
 import { Language, UserRole } from '../types';
 
 export type SignalingMessage = 
+  | { type: 'PING'; role: UserRole }
   | { type: 'JOIN_ROOM'; role: UserRole; language: Language }
   | { type: 'AUDIO_CHUNK'; senderRole: UserRole; data: string } // Base64 Audio
   | { type: 'TRANSCRIPT'; senderRole: UserRole; text: string; isTranslation: boolean };

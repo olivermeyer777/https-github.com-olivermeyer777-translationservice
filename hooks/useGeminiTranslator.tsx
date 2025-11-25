@@ -29,6 +29,7 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const serviceRef = useRef<GeminiLiveService | null>(null);
+  const heartbeatRef = useRef<number | null>(null);
 
   // Play audio buffer (used for incoming remote audio)
   const playAudio = useCallback(async (base64Data: string) => {
@@ -43,7 +44,6 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
         
         // Handle Output Device selection if supported
         if (audioOutputDeviceId && (ctx as any).setSinkId) {
-            // This is experimental in some browsers
              try {
                 await (ctx as any).setSinkId(audioOutputDeviceId);
              } catch(e) { console.warn("Cannot set sinkId on AudioContext", e); }
@@ -65,18 +65,21 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
     }
   }, [audioOutputDeviceId]);
 
-  // Signaling: Handle Room Events
+  // Signaling: Handle Room Events & Heartbeat
   useEffect(() => {
-    // Announce ourselves when we join or when we change target language logic
-    signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
-
+    // 1. Subscribe to messages
     const cleanup = signaling.subscribe((msg: SignalingMessage) => {
+        if (msg.type === 'PING') {
+            if (msg.role !== userRole) {
+                // Someone else is looking for us. Announce ourselves!
+                signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
+            }
+        }
+
         if (msg.type === 'JOIN_ROOM') {
             if (msg.role !== userRole) {
                 // Found our partner!
                 setTargetLanguage(msg.language);
-                // Resend our info so they know about us too
-                signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
             }
         }
 
@@ -96,8 +99,35 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
              ].slice(-50));
         }
     });
-    return cleanup;
-  }, [userRole, userLanguage, playAudio]);
+
+    // 2. Start Heartbeat (PING) until we find a target
+    const startHeartbeat = () => {
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        
+        // Announce immediately
+        signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
+        signaling.send({ type: 'PING', role: userRole });
+
+        // Loop
+        heartbeatRef.current = window.setInterval(() => {
+            if (!targetLanguage) {
+                 signaling.send({ type: 'PING', role: userRole });
+            } else {
+                // If we have a target, we can stop pinging, but sending generic presence is fine
+                // For now, let's stop strict pinging to reduce noise, 
+                // but we might want to keep it for disconnect detection later.
+                if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+            }
+        }, 2000);
+    };
+
+    startHeartbeat();
+
+    return () => {
+        cleanup();
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    };
+  }, [userRole, userLanguage, playAudio, targetLanguage]);
 
   // Connect to Gemini ONLY when we have a target language
   useEffect(() => {
@@ -125,7 +155,6 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
                     });
                 },
                 onTranscript: (text, isInput) => {
-                    // Log locally and broadcast
                     const newItem: TranscriptItem = {
                         id: Date.now() + Math.random(),
                         text,
@@ -176,7 +205,7 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   }, []);
 
   const connect = useCallback(() => {
-      // Handled automatically
+      // Handled automatically via effects
   }, []);
 
   const setMuted = useCallback((muted: boolean) => {

@@ -283,19 +283,22 @@ function SessionView({
 
     const isAgent = userRole === UserRole.AGENT;
     
-    const remoteImg = isAgent 
-        ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80' 
-        : 'https://images.unsplash.com/photo-1560250097-0b93528c311a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80';
+    // Using generic stock videos for a "live" feel
+    const remoteVideoSrc = isAgent 
+        ? 'https://cdn.coverr.co/videos/coverr-woman-working-on-her-laptop-at-home-4752/1080p.mp4' // Generic home user for Agent to see
+        : 'https://cdn.coverr.co/videos/coverr-customer-support-agent-talking-to-a-client-5619/1080p.mp4'; // Professional agent for Customer to see
 
     return (
         <div className="relative w-full h-screen bg-[#202124] overflow-hidden flex flex-col text-white font-sans">
             
             {/* --- MAIN REMOTE VIDEO --- */}
-            <div className="flex-1 p-4 flex items-center justify-center relative">
+            <div className="flex-1 p-4 flex items-center justify-center relative min-h-0">
                 <div className="relative w-full h-full max-w-[1600px] rounded-3xl overflow-hidden bg-[#3c4043] shadow-2xl">
-                    <img 
-                        src={remoteImg}
-                        alt="Remote User" 
+                    <video 
+                        src={remoteVideoSrc}
+                        autoPlay
+                        loop
+                        muted
                         className={`w-full h-full object-cover transition-all duration-1000 ${targetLanguage ? 'opacity-100 scale-100' : 'opacity-40 scale-105 blur-sm'}`}
                     />
                     
@@ -311,11 +314,12 @@ function SessionView({
                     )}
 
                     {!targetLanguage && (
-                         <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 text-center">
+                         <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 text-center z-10">
                             <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center animate-pulse">
                                 <div className="w-8 h-8 rounded-full bg-blue-400"></div>
                             </div>
                             <h2 className="text-2xl font-medium">Waiting for partner...</h2>
+                            <p className="text-gray-400 text-sm max-w-md">Open the other role in a separate tab to connect.</p>
                          </div>
                     )}
                 </div>
@@ -379,7 +383,7 @@ function SessionView({
             </div>
 
             {/* --- BOTTOM CONTROL BAR --- */}
-            <div className="h-20 flex items-center justify-center gap-4 px-6 relative mb-2">
+            <div className="h-20 flex items-center justify-center gap-4 px-6 relative mb-2 shrink-0 z-50">
                 
                 {/* 1. Mic Toggle */}
                 <button 
