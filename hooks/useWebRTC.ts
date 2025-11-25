@@ -52,6 +52,7 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
     const handleSignal = async (msg: SignalingMessage) => {
       if (msg.type !== 'WEBRTC_SIGNAL' || msg.senderRole === userRole) return;
       
+      // Ensure we have local stream before answering if possible, or at least created the PC
       const pc = pcRef.current || createPeerConnection();
       const { signal } = msg;
 
@@ -59,6 +60,14 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
         if (signal.type === 'OFFER') {
           console.log("WebRTC: Received Offer");
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          
+          // Add tracks if they weren't added during create (e.g. if created just now)
+          if (localStream && pc.getSenders().length === 0) {
+             localStream.getTracks().forEach(track => {
+                 pc.addTrack(track, localStream);
+             });
+          }
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           
@@ -82,11 +91,11 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
 
     const cleanup = signaling.subscribe(handleSignal);
     return cleanup;
-  }, [userRole, createPeerConnection]);
+  }, [userRole, createPeerConnection, localStream]);
 
-  // Initiate Offer (Only if initiator and room is connected)
+  // Initiate Offer (Only if initiator, room is connected, AND local stream is ready)
   useEffect(() => {
-    if (isConnectedToRoom && isInitiator && !pcRef.current) {
+    if (isConnectedToRoom && isInitiator && !pcRef.current && localStream) {
       const startCall = async () => {
         const pc = createPeerConnection();
         const offer = await pc.createOffer();
@@ -100,27 +109,26 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
         });
       };
       
-      // Small delay to ensure other side is ready
-      setTimeout(startCall, 1000);
+      // Small delay to ensure other side is likely ready
+      setTimeout(startCall, 1500);
     }
-  }, [isConnectedToRoom, isInitiator, createPeerConnection, userRole]);
+  }, [isConnectedToRoom, isInitiator, createPeerConnection, userRole, localStream]);
 
-  // Update tracks if local stream changes
+  // Update tracks if local stream changes mid-call
   useEffect(() => {
       const pc = pcRef.current;
       if (pc && localStream) {
           const senders = pc.getSenders();
           const videoSender = senders.find(s => s.track?.kind === 'video');
-          const audioSender = senders.find(s => s.track?.kind === 'audio');
           
           const newVideoTrack = localStream.getVideoTracks()[0];
-          // We don't send audio via WebRTC in this app (Audio goes via Gemini), 
-          // but we send video.
           
           if (videoSender && newVideoTrack) {
               videoSender.replaceTrack(newVideoTrack);
-          } else if (newVideoTrack) {
-              pc.addTrack(newVideoTrack, localStream);
+          } else if (newVideoTrack && senders.length === 0) {
+             // If we had no tracks before, we might need renegotiation if we add one now.
+             // But simpler to just add it.
+             pc.addTrack(newVideoTrack, localStream);
           }
       }
   }, [localStream]);

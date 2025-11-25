@@ -162,10 +162,11 @@ export default function App() {
       setMuted(!micOn);
   }, [micOn, cameraOn, activeStream, setMuted]);
 
+  // Updated to launch in NEW TABS
   const handleStart = (role: UserRole) => {
-    setUserRole(role);
-    setUserLanguage(role === UserRole.CUSTOMER ? DEFAULT_CUSTOMER_LANGUAGE : DEFAULT_AGENT_LANGUAGE);
-    setAppState(AppState.LANGUAGE_SELECTION);
+    const url = new URL(window.location.href);
+    url.searchParams.set('role', role === UserRole.CUSTOMER ? 'customer' : 'agent');
+    window.open(url.toString(), '_blank');
   };
 
   const handleLanguageSelect = (lang: Language) => {
@@ -177,7 +178,12 @@ export default function App() {
   const handleEndCall = () => {
     disconnect();
     setAppState(AppState.LANDING);
-    window.location.search = ''; // Clear query params
+    // If we are in a role-specific tab, reload the page cleanly or close it
+    if (window.location.search.includes('role')) {
+       // Optional: Close window or go back to landing
+       // window.close(); 
+       window.location.search = '';
+    }
   };
 
   // --- VIEWS ---
