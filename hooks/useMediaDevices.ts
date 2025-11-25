@@ -12,10 +12,24 @@ export const useMediaDevices = () => {
   });
 
   const getDevices = useCallback(async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        console.warn("MediaDevices API not supported");
+        return;
+    }
+
     try {
-      // Request permission first to get labels
-      await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      // 1. Try to get permission to read labels
+      // We wrap this in a try/catch so we don't crash if permission is denied
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        // Stop immediately, we just wanted the labels
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.warn("Permission denied for media devices. Labels will be empty or generic.", err);
+        // Continue execution to at least get device IDs (even if unlabelled)
+      }
       
+      // 2. Enumerate
       const enumerate = await navigator.mediaDevices.enumerateDevices();
       const mapped = enumerate.map(d => ({
         deviceId: d.deviceId,
@@ -24,7 +38,7 @@ export const useMediaDevices = () => {
       }));
       setDevices(mapped);
 
-      // Set defaults if empty
+      // 3. Set Defaults (prefer existing config, then first available)
       setConfig(prev => ({
         videoInputId: prev.videoInputId || mapped.find(d => d.kind === 'videoinput')?.deviceId || '',
         audioInputId: prev.audioInputId || mapped.find(d => d.kind === 'audioinput')?.deviceId || '',
@@ -36,38 +50,56 @@ export const useMediaDevices = () => {
   }, []);
 
   const startCamera = useCallback(async (videoDeviceId?: string) => {
-    if (activeStream) {
-      activeStream.getTracks().forEach(t => t.stop());
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return null;
     }
-
+    
     try {
-      const constraints: MediaStreamConstraints = {
-        video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
-        audio: false // We handle audio separately in Gemini Service
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      setActiveStream(stream);
-      return stream;
-    } catch (e) {
-      console.error("Failed to start camera", e);
-      return null;
+        const constraints: MediaStreamConstraints = {
+            video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
+            audio: false 
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        setActiveStream(prev => {
+            // Stop previous stream tracks
+            if (prev) prev.getTracks().forEach(t => t.stop());
+            return stream;
+        });
+        return stream;
+    } catch (e: any) {
+        // Gracefully handle permission denied errors
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            console.warn("Camera start failed: Permission denied by user.");
+        } else {
+            console.error("Failed to start camera", e);
+        }
+        return null;
     }
-  }, [activeStream]);
+  }, []);
 
   useEffect(() => {
     getDevices();
+    
+    // Cleanup on unmount
     return () => {
-      if (activeStream) activeStream.getTracks().forEach(t => t.stop());
+        setActiveStream(prev => {
+            if (prev) prev.getTracks().forEach(t => t.stop());
+            return null;
+        });
     };
-  }, []);
+  }, [getDevices]);
 
-  // Restart camera when selection changes
+  // Restart camera when config changes
   useEffect(() => {
-    if (config.videoInputId) {
-        startCamera(config.videoInputId);
-    }
-  }, [config.videoInputId]);
+      // If we have a specific ID, use it. If empty string, try default (true)
+      if (config.videoInputId) {
+          startCamera(config.videoInputId);
+      } else {
+          startCamera();
+      }
+  }, [config.videoInputId, startCamera]);
 
   return {
     devices,

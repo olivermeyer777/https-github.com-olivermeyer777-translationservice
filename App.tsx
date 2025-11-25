@@ -357,9 +357,9 @@ export default function App() {
                 autoPlay
                 muted
                 playsInline
-                className={`w-full h-full object-cover ${!cameraOn ? 'hidden' : ''}`} 
+                className={`w-full h-full object-cover ${(!cameraOn || !activeStream) ? 'hidden' : ''}`} 
              />
-             {!cameraOn && (
+             {(!cameraOn || !activeStream) && (
                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800 text-white">
                      <Icons.Camera off />
                  </div>
