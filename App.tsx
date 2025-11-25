@@ -292,7 +292,14 @@ function SessionView({
     const isAgent = userRole === UserRole.AGENT;
     
     // Helper to get API Key for warning
-    const getApiKey = () => process.env.API_KEY;
+    const getApiKey = () => {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+            // @ts-ignore
+            return import.meta.env.VITE_API_KEY;
+        }
+        return process.env.API_KEY;
+    }
 
     // Using generic stock videos for a "live" feel
     const remoteVideoSrc = isAgent 
@@ -306,7 +313,7 @@ function SessionView({
             {(!getApiKey() || error) && (
                 <div className="absolute top-0 left-0 w-full z-[100] bg-red-600 text-white text-center py-2 text-sm font-medium flex items-center justify-center gap-2">
                     <ExclamationTriangleIcon />
-                    {error || "API Key missing. Translation will not work."}
+                    {error || "API Key missing. Set VITE_API_KEY in Vercel."}
                 </div>
             )}
 

@@ -13,6 +13,21 @@ interface ConnectOptions {
   onTranscript: (text: string, isInput: boolean) => void;
 }
 
+// Helper to safely get API Key from various environments
+const getApiKey = (): string | undefined => {
+  // 1. Check process.env (Standard Node/AI Studio)
+  if (typeof process !== 'undefined' && process.env?.API_KEY) {
+    return process.env.API_KEY;
+  }
+  // 2. Check Vite/Vercel (Client-side)
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY;
+  }
+  return undefined;
+};
+
 export class GeminiLiveService {
   private ai: GoogleGenAI;
   private sessionPromise: Promise<any> | null = null;
@@ -25,7 +40,8 @@ export class GeminiLiveService {
   private isConnected: boolean = false;
   
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const key = getApiKey();
+    this.ai = new GoogleGenAI({ apiKey: key || 'dummy_key' }); // Prevent constructor crash, validate in connect
   }
 
   public setMuted(muted: boolean) {
@@ -33,8 +49,9 @@ export class GeminiLiveService {
   }
 
   public async connect(options: ConnectOptions) {
-    if (!process.env.API_KEY) {
-        options.onError(new Error("API Key is missing."));
+    const key = getApiKey();
+    if (!key) {
+        options.onError(new Error("API Key is missing. Please set VITE_API_KEY in Vercel."));
         return;
     }
 
@@ -91,14 +108,12 @@ export class GeminiLiveService {
             },
             onclose: () => {
                 console.log("Gemini Live Closed");
-                this.isConnected = false;
-                this.stopMicrophone(); // Stop mic immediately to prevent errors
+                this.disconnect();
                 options.onClose();
             },
             onerror: (e) => {
                 console.error("Gemini Live Error", e);
-                this.isConnected = false;
-                this.stopMicrophone();
+                this.disconnect();
                 options.onError(new Error("Connection error"));
             }
         }
@@ -106,7 +121,7 @@ export class GeminiLiveService {
       
       await this.sessionPromise;
     } catch (err) {
-      this.isConnected = false;
+      this.disconnect();
       console.error("Connection failed", err);
       options.onError(err instanceof Error ? err : new Error("Failed to connect"));
     }
@@ -135,13 +150,17 @@ export class GeminiLiveService {
                 if (this.isConnected) {
                     try {
                         session.sendRealtimeInput({ media: pcmBlob });
-                    } catch (e) {
-                        console.warn("Error sending audio frame, stopping...", e);
-                        this.disconnect();
+                    } catch (e: any) {
+                        // Suppress "WebSocket is already in CLOSING or CLOSED state" spam
+                        if (e.message?.includes("CLOSED") || e.message?.includes("CLOSING")) {
+                            this.disconnect();
+                        } else {
+                            console.warn("Error sending audio frame:", e);
+                        }
                     }
                 }
-            }).catch(e => {
-                // Session likely closed
+            }).catch(() => {
+                // Session promise rejected (likely closed)
             });
         }
       };
