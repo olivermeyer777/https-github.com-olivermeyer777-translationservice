@@ -14,9 +14,9 @@ class SignalingService {
   constructor() {
     this.channel = new BroadcastChannel('postbranch_room_v2');
     this.channel.onmessage = (event) => {
-      // Debug log (can be verbose, but useful for initial troubleshooting)
+      // Debug log enabled for troubleshooting connectivity
       if (event.data.type !== 'AUDIO_CHUNK') {
-        // console.debug('Signal received:', event.data);
+         console.debug('Signal received:', event.data);
       }
       this.listeners.forEach(l => l(event.data));
     };

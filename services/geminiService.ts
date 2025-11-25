@@ -13,6 +13,37 @@ interface ConnectOptions {
   onTranscript: (text: string, isInput: boolean) => void;
 }
 
+// AudioWorklet processor code as a string to avoid file loading issues in simple setups
+const WorkletProcessorCode = `
+class RecorderProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 2048; // Process in chunks
+    this.buffer = new Float32Array(this.bufferSize);
+    this.bytesWritten = 0;
+  }
+
+  process(inputs) {
+    const input = inputs[0];
+    if (input.length > 0) {
+      const channelData = input[0];
+      
+      // Simple buffer accumulation
+      for (let i = 0; i < channelData.length; i++) {
+        this.buffer[this.bytesWritten++] = channelData[i];
+        if (this.bytesWritten >= this.bufferSize) {
+          // Send buffer to main thread
+          this.port.postMessage(this.buffer.slice());
+          this.bytesWritten = 0;
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('recorder-worklet', RecorderProcessor);
+`;
+
 // Helper to safely get API Key from various environments
 const getApiKey = (): string | undefined => {
   // 1. Check process.env (Standard Node/AI Studio)
@@ -34,7 +65,7 @@ export class GeminiLiveService {
   private inputAudioContext: AudioContext | null = null;
   private outputAudioContext: AudioContext | null = null;
   private stream: MediaStream | null = null;
-  private processor: ScriptProcessorNode | null = null;
+  private workletNode: AudioWorkletNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private isMuted: boolean = false;
   private isConnected: boolean = false;
@@ -131,17 +162,22 @@ export class GeminiLiveService {
     try {
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       
+      // Load AudioWorklet from Blob (avoids external file requirement)
+      const blob = new Blob([WorkletProcessorCode], { type: 'application/javascript' });
+      const workletUrl = URL.createObjectURL(blob);
+      await this.inputAudioContext.audioWorklet.addModule(workletUrl);
+
       this.stream = await navigator.mediaDevices.getUserMedia({ 
           audio: deviceId ? { deviceId: { exact: deviceId } } : true
       });
       
       this.source = this.inputAudioContext.createMediaStreamSource(this.stream);
-      this.processor = this.inputAudioContext.createScriptProcessor(4096, 1, 1);
+      this.workletNode = new AudioWorkletNode(this.inputAudioContext, 'recorder-worklet');
 
-      this.processor.onaudioprocess = (e) => {
+      this.workletNode.port.onmessage = (e) => {
         if (this.isMuted || !this.isConnected) return; 
 
-        const inputData = e.inputBuffer.getChannelData(0);
+        const inputData = e.data as Float32Array;
         const pcmBlob = createPcmBlob(inputData);
         
         if (this.sessionPromise) {
@@ -165,8 +201,8 @@ export class GeminiLiveService {
         }
       };
 
-      this.source.connect(this.processor);
-      this.processor.connect(this.inputAudioContext.destination);
+      this.source.connect(this.workletNode);
+      this.workletNode.connect(this.inputAudioContext.destination);
     } catch (err) {
       console.error("Microphone access denied", err);
       throw err;
@@ -178,9 +214,9 @@ export class GeminiLiveService {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
     }
-    if (this.processor) {
-      this.processor.disconnect();
-      this.processor = null;
+    if (this.workletNode) {
+        this.workletNode.disconnect();
+        this.workletNode = null;
     }
     if (this.source) {
       this.source.disconnect();
