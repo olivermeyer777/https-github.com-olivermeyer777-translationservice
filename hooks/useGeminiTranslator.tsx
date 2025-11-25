@@ -25,17 +25,16 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   const [targetLanguage, setTargetLanguage] = useState<Language | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
+  const [isTranslating, setIsTranslating] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const serviceRef = useRef<GeminiLiveService | null>(null);
   const heartbeatRef = useRef<number | null>(null);
-  
-  // Retry logic
+  const translationTimeoutRef = useRef<number | null>(null);
   const retryTimeoutRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
 
-  // Play audio buffer (used for incoming remote audio)
   const playAudio = useCallback(async (base64Data: string) => {
     try {
         if (!audioContextRef.current) {
@@ -43,23 +42,16 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
             audioContextRef.current = new AudioContextClass({ sampleRate: 24000 });
             nextStartTimeRef.current = audioContextRef.current.currentTime;
         }
-
         const ctx = audioContextRef.current;
-        
-        // Handle Output Device selection if supported
         if (audioOutputDeviceId && (ctx as any).setSinkId) {
-             try {
-                await (ctx as any).setSinkId(audioOutputDeviceId);
-             } catch(e) { /* ignore */ }
+             try { await (ctx as any).setSinkId(audioOutputDeviceId); } catch(e) {}
         }
 
         const audioBytes = base64ToUint8Array(base64Data);
         const audioBuffer = await decodeAudioData(audioBytes, ctx);
-        
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
-
         const now = ctx.currentTime;
         const startTime = Math.max(nextStartTimeRef.current, now);
         source.start(startTime);
@@ -69,64 +61,37 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
     }
   }, [audioOutputDeviceId]);
 
-  // Signaling: Handle Room Events & Heartbeat
   useEffect(() => {
-    // 1. Subscribe to messages
     const cleanup = signaling.subscribe((msg: SignalingMessage) => {
-        // PING received from someone else
-        if (msg.type === 'PING') {
-            if (msg.role !== userRole) {
-                // If we receive a PING from the other role, we know they are there AND what language they speak
-                if (!targetLanguage || targetLanguage.code !== msg.language.code) {
-                    console.log("Found partner via PING:", msg.role, msg.language.name);
-                    setTargetLanguage(msg.language);
-                }
-                
-                // Always announce ourselves back so they find us too
-                signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
-            }
-        }
-
-        if (msg.type === 'JOIN_ROOM') {
-            if (msg.role !== userRole) {
-                // Explicit join from partner
-                console.log("Partner JOINED:", msg.role, msg.language.name);
+        if (msg.type === 'PING' && msg.role !== userRole) {
+            if (!targetLanguage || targetLanguage.code !== msg.language.code) {
                 setTargetLanguage(msg.language);
             }
+            signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
         }
-
+        if (msg.type === 'JOIN_ROOM' && msg.role !== userRole) {
+            setTargetLanguage(msg.language);
+        }
         if (msg.type === 'AUDIO_CHUNK' && msg.senderRole !== userRole) {
             playAudio(msg.data);
         }
-
         if (msg.type === 'TRANSCRIPT' && msg.senderRole !== userRole) {
-             setTranscripts(prev => [
-                ...prev,
-                { 
-                    id: Date.now() + Math.random(), 
-                    text: msg.text, 
-                    sender: msg.senderRole === 'CUSTOMER' ? 'Client' : 'Agent',
-                    isTranslation: msg.isTranslation
-                }
-             ].slice(-50));
+             setTranscripts(prev => [...prev, { 
+                id: Date.now() + Math.random(), 
+                text: msg.text, 
+                sender: msg.senderRole === 'CUSTOMER' ? 'Client' : 'Agent',
+                isTranslation: msg.isTranslation
+             }].slice(-50));
         }
     });
 
-    // 2. Start Heartbeat (PING)
-    // We ping periodically to announce our presence.
-    // We include OUR language so the other side can connect immediately upon hearing it.
     const startHeartbeat = () => {
         if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-        
-        // Initial announce
         signaling.send({ type: 'PING', role: userRole, language: userLanguage });
-
-        // Loop
         heartbeatRef.current = window.setInterval(() => {
              signaling.send({ type: 'PING', role: userRole, language: userLanguage });
-        }, 1500); // Ping every 1.5s
+        }, 1500); 
     };
-
     startHeartbeat();
 
     return () => {
@@ -135,37 +100,33 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
     };
   }, [userRole, userLanguage, playAudio, targetLanguage]);
 
-  // Connect to Gemini ONLY when we have a target language
+  // Connection Management
   useEffect(() => {
     if (!targetLanguage || isConnected || isConnecting) return;
-    
-    // Prevent connecting if we hit max retries recently
     if (retryCountRef.current > 5) {
-        setError("Unable to connect to translation service. Please check your network or API Key.");
+        setError("Unable to connect to translation service.");
         return;
     }
 
     const start = async () => {
         setIsConnecting(true);
         setError(null);
-
         const service = new GeminiLiveService();
         serviceRef.current = service;
 
         try {
-            // Distinct voices:
-            // If I am Customer, my translator (heard by Agent) should sound like 'Kore' (Female)
-            // If I am Agent, my translator (heard by Customer) should sound like 'Fenrir' (Male)
             const myTranslatorVoice = userRole === UserRole.CUSTOMER ? 'Kore' : 'Fenrir';
-
             await service.connect({
                 userLanguage: userLanguage.geminiName,
                 targetLanguage: targetLanguage.geminiName,
                 userRole: userRole,
                 voiceName: myTranslatorVoice,
                 audioInputDeviceId,
-                // On Audio Data (Translation of MY voice): Broadcast to other
                 onAudioData: (base64Audio) => {
+                    // Translation received (Output). Stop bubble.
+                    setIsTranslating(false);
+                    if (translationTimeoutRef.current) clearTimeout(translationTimeoutRef.current);
+
                     signaling.send({
                         type: 'AUDIO_CHUNK',
                         senderRole: userRole,
@@ -173,6 +134,14 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
                     });
                 },
                 onTranscript: (text, isInput) => {
+                    // If isInput = true, it means user just spoke. Start bubble.
+                    if (isInput) {
+                        setIsTranslating(true);
+                        // Failsafe: if no audio comes back in 5s, hide bubble
+                        if (translationTimeoutRef.current) clearTimeout(translationTimeoutRef.current);
+                        translationTimeoutRef.current = window.setTimeout(() => setIsTranslating(false), 5000);
+                    }
+
                     const newItem: TranscriptItem = {
                         id: Date.now() + Math.random(),
                         text,
@@ -180,7 +149,6 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
                         isTranslation: !isInput
                     };
                     setTranscripts(prev => [...prev, newItem].slice(-50));
-                    
                     signaling.send({
                         type: 'TRANSCRIPT',
                         senderRole: userRole,
@@ -194,36 +162,31 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
                     serviceRef.current = null;
                 },
                 onError: (err) => {
-                    console.warn("Service error, attempting retry logic...", err);
+                    console.warn("Service error, attempting retry...", err);
                     setError(err.message);
                     setIsConnected(false);
                     setIsConnecting(false);
                     serviceRef.current = null;
-                    
-                    // Retry with backoff
                     retryCountRef.current += 1;
                     const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
                     retryTimeoutRef.current = window.setTimeout(() => {
                         retryTimeoutRef.current = null;
-                        // Force re-evaluation
                         setIsConnected(false); 
                     }, delay);
                 }
             });
-            // If we got here without throwing, we assume connected initially
             setIsConnected(true);
-            retryCountRef.current = 0; // Reset retries on success
+            retryCountRef.current = 0; 
         } catch(e) {
             setError("Failed to connect to Translator");
             setIsConnecting(false);
             serviceRef.current = null;
         }
     };
-
     start();
-
     return () => {
         if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+        if (translationTimeoutRef.current) clearTimeout(translationTimeoutRef.current);
     };
   }, [targetLanguage, userLanguage, userRole, isConnected, isConnecting, audioInputDeviceId]);
 
@@ -256,6 +219,7 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
     disconnect,
     isConnected,
     isConnecting,
+    isTranslating,
     targetLanguage,
     error,
     transcripts,

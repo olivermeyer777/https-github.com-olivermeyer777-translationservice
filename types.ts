@@ -10,6 +10,7 @@ export interface Language {
   name: string;
   flag: string; // Emoji
   geminiName: string; // How we refer to it in the prompt
+  greeting: string; // "Hello", "Guten Tag", etc.
 }
 
 export enum UserRole {

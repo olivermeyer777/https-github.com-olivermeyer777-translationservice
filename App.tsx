@@ -4,15 +4,16 @@ import { AppState, Language, UserRole } from './types';
 import { DEFAULT_AGENT_LANGUAGE, DEFAULT_CUSTOMER_LANGUAGE, SUPPORTED_LANGUAGES } from './constants';
 import { Button } from './components/Button';
 import { LanguageSelector } from './components/LanguageSelector';
-import { useGeminiTranslator, TranscriptItem } from './hooks/useGeminiTranslator';
+import { useGeminiTranslator } from './hooks/useGeminiTranslator';
 import { useWebRTC } from './hooks/useWebRTC';
 import { Visualizer } from './components/Visualizer';
 import { useMediaDevices } from './hooks/useMediaDevices';
 import { SettingsModal } from './components/SettingsModal';
 import { getApiKey } from './services/geminiService';
 import { signaling } from './services/signalingService';
+import { TranslationBubble } from './components/TranslationBubble';
 
-// --- ICONS (Clean, Modern, Flat, Lucide Style) ---
+// --- ICONS ---
 const Icons = {
     PhoneX: () => (
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
@@ -33,17 +34,11 @@ const Icons = {
     Settings: () => (
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     ),
-    ChevronDown: () => (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-    ),
     User: () => (
        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     ),
     Briefcase: () => (
        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-    ),
-    AlertTriangle: () => (
-       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-600"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     ),
     Share: () => (
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -52,18 +47,13 @@ const Icons = {
 
 // --- COMPONENTS ---
 
-const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
-  const [selectedLang, setSelectedLang] = useState<Language>(
-      role === UserRole.AGENT ? DEFAULT_AGENT_LANGUAGE : DEFAULT_CUSTOMER_LANGUAGE
-  );
-  const [inCall, setInCall] = useState(false);
+const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ role, selectedLang }) => {
   const [showTranscript, setShowTranscript] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCamOn, setIsCamOn] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [roomId, setRoomId] = useState<string>('');
 
-  // Initialize Room ID from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get('room');
@@ -73,14 +63,13 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
     }
   }, []);
 
-  // 1. Device Management (Safe)
   const { config, setConfig, activeStream, devices, refreshDevices } = useMediaDevices();
   
-  // 2. Translator Logic
   const { 
       connect: connectGemini, 
       disconnect: disconnectGemini, 
       isConnected: isGeminiConnected,
+      isTranslating,
       targetLanguage,
       error: geminiError,
       transcripts,
@@ -92,26 +81,26 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
       audioOutputDeviceId: config.audioOutputId
   });
 
-  // 3. WebRTC Video Logic
+  // Automatically connect Gemini once in Session View
+  useEffect(() => {
+    if (!isGeminiConnected) {
+        connectGemini();
+    }
+    // Cleanup on unmount
+    return () => disconnectGemini();
+  }, []);
+
   const { remoteStream } = useWebRTC({
       userRole: role,
       localStream: activeStream,
-      isConnectedToRoom: inCall 
+      isConnectedToRoom: true
   });
-
-  // Start call handler
-  const handleStartCall = () => {
-      setInCall(true);
-      connectGemini();
-  };
 
   const handleEndCall = () => {
       disconnectGemini();
-      setInCall(false);
       window.location.reload();
   };
 
-  // Toggle Mute
   useEffect(() => {
       if (activeStream) {
           activeStream.getAudioTracks().forEach(t => t.enabled = isMicOn);
@@ -119,18 +108,15 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
       setMuted(!isMicOn);
   }, [isMicOn, activeStream, setMuted]);
 
-  // Toggle Camera
   useEffect(() => {
       if (activeStream) {
           activeStream.getVideoTracks().forEach(t => t.enabled = isCamOn);
       }
   }, [isCamOn, activeStream]);
 
-  // Use callback refs to ensure streams are attached immediately when elements mount
   const setLocalVideoRef = useCallback((node: HTMLVideoElement | null) => {
     if (node) {
         node.srcObject = activeStream;
-        // Explicitly play to avoid autoplay policy issues if needed
         node.play().catch(() => {});
     }
   }, [activeStream]);
@@ -143,58 +129,8 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   }, [remoteStream]);
 
 
-  // -- PRE-CALL (Language Selection) --
-  if (!inCall) {
-      return (
-          <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-              <div className="h-2 bg-[#FFCC00] w-full" />
-              <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                     <div className="w-10 h-10 bg-[#FFCC00] flex items-center justify-center font-bold text-xl rounded-sm">P</div>
-                     <h1 className="text-xl font-bold tracking-tight text-black">PostBranch Video-Schalter</h1>
-                  </div>
-                  <div className="text-sm font-mono text-gray-500 bg-gray-100 px-3 py-1 rounded">
-                      Room: {roomId || '...'}
-                  </div>
-              </header>
-
-              <main className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
-                  <div className="w-full max-w-4xl text-center space-y-12">
-                      <div className="space-y-4">
-                          <h2 className="text-3xl md:text-5xl font-bold text-gray-900">
-                              {role === UserRole.CUSTOMER ? 'Willkommen bei der Post' : 'PostBranch Agent Portal'}
-                          </h2>
-                          <p className="text-xl text-gray-500 max-w-2xl mx-auto">
-                              {role === UserRole.CUSTOMER 
-                                  ? 'Bitte wählen Sie Ihre Sprache für das Beratungsgespräch.' 
-                                  : 'Select your preferred language to begin serving customers.'}
-                          </p>
-                      </div>
-
-                      <LanguageSelector 
-                          selectedLang={selectedLang}
-                          onSelect={setSelectedLang}
-                      />
-
-                      <div className="pt-8">
-                          <Button 
-                              onClick={handleStartCall}
-                              size="xl" 
-                              variant="post-yellow"
-                              className="w-full max-w-md mx-auto shadow-xl hover:shadow-2xl text-lg rounded-full"
-                          >
-                              {role === UserRole.CUSTOMER ? 'Video-Beratung starten' : 'Open Counter'}
-                          </Button>
-                      </div>
-                  </div>
-              </main>
-          </div>
-      );
-  }
-
-  // -- ACTIVE CALL ROOM --
   return (
-      <div className="fixed inset-0 bg-[#202124] flex flex-col text-white overflow-hidden">
+      <div className="fixed inset-0 bg-[#202124] flex flex-col text-white overflow-hidden font-sans">
         <SettingsModal 
             isOpen={isSettingsOpen} 
             onClose={() => setIsSettingsOpen(false)}
@@ -205,7 +141,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
 
         {!getApiKey() && (
             <div className="absolute top-0 left-0 right-0 z-50 bg-red-600 text-white text-xs py-1 px-4 text-center font-mono">
-                API KEY MISSING - PLEASE CHECK VITE_API_KEY
+                API KEY MISSING
             </div>
         )}
 
@@ -239,7 +175,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                 )}
 
                 {/* Local Video PIP */}
-                <div className="absolute top-6 left-6 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10 transition-all duration-300 hover:scale-105">
+                <div className="absolute top-6 left-6 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10 transition-all duration-300 hover:scale-105 group">
                     <video 
                         ref={setLocalVideoRef} 
                         autoPlay 
@@ -255,6 +191,11 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                     <div className="absolute bottom-2 left-2 text-[10px] font-medium px-2 py-0.5 bg-black/50 rounded backdrop-blur-sm flex items-center gap-2">
                         You ({selectedLang.flag})
                         <Visualizer isActive={isMicOn} />
+                    </div>
+                    
+                    {/* Translation Bubble Overlay */}
+                    <div className="absolute -bottom-14 left-0 w-full flex justify-center">
+                         <TranslationBubble show={isTranslating} />
                     </div>
                 </div>
 
@@ -274,7 +215,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
 
             {/* Transcript */}
             {showTranscript && (
-                <div className="w-80 bg-white border-l border-gray-200 flex flex-col text-gray-900 animate-slide-in-right">
+                <div className="w-80 bg-white border-l border-gray-200 flex flex-col text-gray-900 animate-slide-in-right z-30">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f8fafc]">
                         <h3 className="font-bold text-sm uppercase tracking-wider text-gray-500">Live Transcript</h3>
                         <button onClick={() => setShowTranscript(false)} className="text-gray-400 hover:text-gray-600">
@@ -303,7 +244,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
         </div>
 
         {/* Control Bar */}
-        <div className="h-20 bg-[#1e1e1e] border-t border-white/5 flex items-center justify-between px-6 z-20 shrink-0">
+        <div className="h-24 bg-[#1e1e1e] border-t border-white/5 flex items-center justify-between px-6 z-20 shrink-0">
             <div className="flex items-center gap-4 text-sm font-medium text-gray-300 w-1/3">
                  <div className={`h-2 w-2 rounded-full ${isGeminiConnected ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500'}`}></div>
                  {role === UserRole.CUSTOMER ? 'Video-Beratung' : 'Client Consultation'}
@@ -311,17 +252,17 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                  {selectedLang.flag} {selectedLang.name}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
                 <button 
                     onClick={() => setIsMicOn(!isMicOn)}
-                    className={`p-4 rounded-full transition-all duration-200 shadow-lg ${isMicOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
+                    className={`h-14 w-14 flex items-center justify-center rounded-full transition-all duration-200 shadow-lg ${isMicOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
                 >
                     <Icons.Mic on={isMicOn} />
                 </button>
 
                 <button 
                     onClick={() => setIsCamOn(!isCamOn)}
-                    className={`p-4 rounded-full transition-all duration-200 shadow-lg ${isCamOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
+                    className={`h-14 w-14 flex items-center justify-center rounded-full transition-all duration-200 shadow-lg ${isCamOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
                 >
                     <Icons.Video on={isCamOn} />
                 </button>
@@ -330,7 +271,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
 
                 <Button 
                     onClick={handleEndCall}
-                    className="!rounded-full px-8 bg-red-600 hover:bg-red-700 border-none text-white h-12 shadow-red-900/50 shadow-lg"
+                    className="!rounded-full px-8 bg-red-600 hover:bg-red-700 border-none text-white h-14 shadow-red-900/50 shadow-lg"
                 >
                     <Icons.PhoneX />
                 </Button>
@@ -357,6 +298,46 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   );
 };
 
+// --- LANGUAGE POPUP ---
+
+const LanguagePopup: React.FC<{ role: UserRole, onComplete: (lang: Language) => void }> = ({ role, onComplete }) => {
+    const [selected, setSelected] = useState<Language | null>(null);
+
+    return (
+        <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col items-center justify-center p-6 animate-fade-in font-sans">
+             <div className="w-full max-w-4xl flex flex-col items-center gap-8">
+                 <div className="text-center space-y-2">
+                     <h2 className="text-3xl md:text-4xl font-bold text-gray-900">
+                         {role === UserRole.CUSTOMER ? 'Welche Sprache sprechen Sie?' : 'Select your Agent Language'}
+                     </h2>
+                     <p className="text-gray-500">
+                         {role === UserRole.CUSTOMER ? 'Bitte wählen Sie eine Sprache aus.' : 'This will be the language you speak during the session.'}
+                     </p>
+                 </div>
+
+                 <LanguageSelector 
+                    onSelect={setSelected}
+                    selectedLang={selected || undefined}
+                 />
+
+                 <div className="mt-8 h-16 w-full max-w-md">
+                     {selected && (
+                        <Button 
+                            onClick={() => onComplete(selected)}
+                            variant="post-yellow"
+                            size="xl"
+                            fullWidth
+                            className="!rounded-full shadow-xl hover:shadow-2xl animate-bounce-in"
+                        >
+                            {role === UserRole.CUSTOMER ? 'Bestätigen & Starten' : 'Confirm & Start'}
+                        </Button>
+                     )}
+                 </div>
+             </div>
+        </div>
+    );
+}
+
 // --- LAUNCHER ---
 
 const Launcher: React.FC = () => {
@@ -365,7 +346,6 @@ const Launcher: React.FC = () => {
   const handleStart = (role: UserRole) => {
     const url = new URL(window.location.href);
     url.searchParams.set('role', role === UserRole.CUSTOMER ? 'customer' : 'agent');
-    // Set a room ID if not present
     if (!url.searchParams.has('room')) {
         url.searchParams.set('room', generatedRoomId);
     }
@@ -436,6 +416,7 @@ const Launcher: React.FC = () => {
 
 export default function App() {
   const [role, setRole] = useState<UserRole | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<Language | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -444,9 +425,21 @@ export default function App() {
     else if (r === 'agent') setRole(UserRole.AGENT);
   }, []);
 
-  if (role) {
-    return <SessionView role={role} />;
+  // 1. Launcher (No Role yet)
+  if (!role) {
+    return <Launcher />;
   }
 
-  return <Launcher />;
+  // 2. Language Selection Popup (Role selected, Lang not yet)
+  if (!selectedLanguage) {
+      return (
+          <LanguagePopup 
+             role={role} 
+             onComplete={(lang) => setSelectedLanguage(lang)} 
+          />
+      );
+  }
+
+  // 3. Session Room (Both selected)
+  return <SessionView role={role} selectedLang={selectedLanguage} />;
 }

@@ -89,19 +89,22 @@ export class GeminiLiveService {
 
     this.outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     
-    // Strict Translator Role
-    // We explicitly tell it NOT to answer, but ONLY to translate.
+    // Updated System Instruction:
+    // Less restrictive than "DO NOT", but clear on role.
     const systemInstruction = `
-    SYSTEM INSTRUCTION:
-    You are a strictly mechanical voice translator. 
-    Your ONLY task is to listen to speech in ${options.userLanguage} and speak the translation in ${options.targetLanguage}.
-
-    CRITICAL RULES:
-    1. Translate EXACTLY what is said. Do not summarize.
-    2. DO NOT engage in conversation.
-    3. DO NOT answer questions. If the user asks "How are you?", you must translate the phrase "How are you?" into ${options.targetLanguage}. DO NOT reply with "I am fine".
-    4. If there is background noise or no clear speech, stay silent.
-    5. Maintain the tone and urgency of the speaker.
+    You are a professional interpreter working at a Swiss Post branch.
+    Your role is to translate spoken language in real-time.
+    
+    Current Session Context:
+    - You are listening to a ${options.userRole} speaking ${options.userLanguage}.
+    - You must translate their speech into ${options.targetLanguage} for the other person.
+    
+    Guidelines:
+    - Listen carefully to the input in ${options.userLanguage}.
+    - Immediately speak the translation in ${options.targetLanguage}.
+    - Be accurate and professional.
+    - Do not add conversational filler (like "Okay", "Sure"). Just translate.
+    - If the user asks a question, translate the question. Do not answer it yourself.
     `;
 
     try {
@@ -114,6 +117,7 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: options.voiceName } },
           },
+          // Empty objects required to enable transcription events
           inputAudioTranscription: { },
           outputAudioTranscription: { },
         },
@@ -123,16 +127,18 @@ export class GeminiLiveService {
                 await this.startMicrophone(options.audioInputDeviceId);
             },
             onmessage: async (message: LiveServerMessage) => {
-                // Handle Audio
+                // Handle Audio (Translation Output)
                 const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
                 if (base64Audio) {
                     options.onAudioData(base64Audio);
                 }
 
                 // Handle Transcriptions
+                // Input = User speaking (Language A)
                 if (message.serverContent?.inputTranscription?.text) {
                     options.onTranscript(message.serverContent.inputTranscription.text, true);
                 }
+                // Output = Model speaking (Language B - Translation)
                 if (message.serverContent?.outputTranscription?.text) {
                     options.onTranscript(message.serverContent.outputTranscription.text, false);
                 }
@@ -160,9 +166,12 @@ export class GeminiLiveService {
 
   private async startMicrophone(deviceId?: string) {
     try {
+      // Ensure strict mode doesn't block context
       this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      if (this.inputAudioContext.state === 'suspended') {
+          await this.inputAudioContext.resume();
+      }
       
-      // Load AudioWorklet from Blob (avoids external file requirement)
       const blob = new Blob([WorkletProcessorCode], { type: 'application/javascript' });
       const workletUrl = URL.createObjectURL(blob);
       await this.inputAudioContext.audioWorklet.addModule(workletUrl);
@@ -182,22 +191,16 @@ export class GeminiLiveService {
         
         if (this.sessionPromise) {
             this.sessionPromise.then(session => {
-                // Double check connection state inside the promise resolution
                 if (this.isConnected) {
                     try {
                         session.sendRealtimeInput({ media: pcmBlob });
                     } catch (e: any) {
-                        // Suppress "WebSocket is already in CLOSING or CLOSED state" spam
                         if (e.message?.includes("CLOSED") || e.message?.includes("CLOSING")) {
                             this.disconnect();
-                        } else {
-                            console.warn("Error sending audio frame:", e);
                         }
                     }
                 }
-            }).catch(() => {
-                // Session promise rejected (likely closed)
-            });
+            }).catch(() => {});
         }
       };
 
@@ -231,7 +234,6 @@ export class GeminiLiveService {
   public disconnect() {
     this.isConnected = false;
     this.stopMicrophone();
-    
     if (this.outputAudioContext) {
         this.outputAudioContext.close();
         this.outputAudioContext = null;

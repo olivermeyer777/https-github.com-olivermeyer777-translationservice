@@ -1,16 +1,16 @@
 import { Language } from './types';
 
 export const SUPPORTED_LANGUAGES: Language[] = [
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪', geminiName: 'German' },
-  { code: 'en', name: 'English', flag: '🇬🇧', geminiName: 'English' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷', geminiName: 'French' },
-  { code: 'es', name: 'Español', flag: '🇪🇸', geminiName: 'Spanish' },
-  { code: 'tr', name: 'Türkçe', flag: '🇹🇷', geminiName: 'Turkish' },
-  { code: 'it', name: 'Italiano', flag: '🇮🇹', geminiName: 'Italian' },
-  { code: 'pl', name: 'Polski', flag: '🇵🇱', geminiName: 'Polish' },
-  { code: 'ar', name: 'العربية', flag: '🇸🇦', geminiName: 'Arabic' },
-  { code: 'zh', name: '中文', flag: '🇨🇳', geminiName: 'Mandarin Chinese' },
-  { code: 'uk', name: 'Українська', flag: '🇺🇦', geminiName: 'Ukrainian' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪', geminiName: 'German', greeting: 'Guten Tag' },
+  { code: 'en', name: 'English', flag: '🇬🇧', geminiName: 'English', greeting: 'Hello' },
+  { code: 'fr', name: 'Français', flag: '🇫🇷', geminiName: 'French', greeting: 'Bonjour' },
+  { code: 'it', name: 'Italiano', flag: '🇮🇹', geminiName: 'Italian', greeting: 'Buongiorno' },
+  { code: 'es', name: 'Español', flag: '🇪🇸', geminiName: 'Spanish', greeting: 'Hola' },
+  { code: 'tr', name: 'Türkçe', flag: '🇹🇷', geminiName: 'Turkish', greeting: 'Merhaba' },
+  { code: 'pt', name: 'Português', flag: '🇵🇹', geminiName: 'Portuguese', greeting: 'Olá' },
+  { code: 'ar', name: 'العربية', flag: '🇸🇦', geminiName: 'Arabic', greeting: 'As-salamu alaykum' },
+  { code: 'zh', name: '中文', flag: '🇨🇳', geminiName: 'Mandarin Chinese', greeting: 'Ni Hao' },
+  { code: 'uk', name: 'Українська', flag: '🇺🇦', geminiName: 'Ukrainian', greeting: 'Dobriy den' },
 ];
 
 export const DEFAULT_AGENT_LANGUAGE = SUPPORTED_LANGUAGES[1]; // English default for agent
