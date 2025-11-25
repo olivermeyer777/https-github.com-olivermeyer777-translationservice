@@ -46,7 +46,7 @@ registerProcessor('recorder-worklet', RecorderProcessor);
 `;
 
 // Helper to safely get API Key from various environments
-const getApiKey = (): string | undefined => {
+export const getApiKey = (): string | undefined => {
   // 1. Check process.env (Standard Node/AI Studio)
   if (typeof process !== 'undefined' && process.env?.API_KEY) {
     return process.env.API_KEY;

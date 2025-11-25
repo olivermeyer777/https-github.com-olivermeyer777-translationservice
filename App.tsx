@@ -9,6 +9,7 @@ import { useWebRTC } from './hooks/useWebRTC';
 import { Visualizer } from './components/Visualizer';
 import { useMediaDevices } from './hooks/useMediaDevices';
 import { SettingsModal } from './components/SettingsModal';
+import { getApiKey } from './services/geminiService';
 
 // --- ICONS (Clean, Modern, Flat, Lucide Style) ---
 const Icons = {
@@ -181,7 +182,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
         />
 
         {/* Warning if no API Key */}
-        {!process.env.API_KEY && (
+        {!getApiKey() && (
             <div className="absolute top-0 left-0 right-0 z-50 bg-red-600 text-white text-xs py-1 px-4 text-center font-mono">
                 API KEY MISSING - PLEASE CHECK VITE_API_KEY
             </div>
