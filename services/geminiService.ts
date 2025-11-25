@@ -1,13 +1,15 @@
+
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audio';
 
 interface ConnectOptions {
   userLanguage: string;
   targetLanguage: string;
-  onAudioData: (buffer: AudioBuffer) => void;
+  userRole: 'CUSTOMER' | 'AGENT';
+  onAudioData: (base64Audio: string) => void;
   onClose: () => void;
   onError: (error: Error) => void;
-  onTranscript: (text: string, isUser: boolean) => void;
+  onTranscript: (text: string, isInput: boolean) => void;
 }
 
 export class GeminiLiveService {
@@ -26,19 +28,21 @@ export class GeminiLiveService {
   public async connect(options: ConnectOptions) {
     this.outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     
-    // System instruction: Act as a strict translator.
-    // In a real dual-stream app, we would have more complex logic.
-    // Here, we simulate the translator: Input User Lang -> Output Target Lang.
+    // Strict Translator Role
     const systemInstruction = `
-      You are a professional, real-time simultaneous interpreter working for a video consultation service.
+      You are a real-time voice translator acting as an intermediary.
       
-      Your task:
-      1. Listen to the audio input which will be in ${options.userLanguage}.
-      2. Immediately translate the input into ${options.targetLanguage}.
-      3. Speak the translation out loud clearly and professionally.
-      4. DO NOT engage in conversation. DO NOT answer questions. DO NOT say "Sure" or "Here is the translation".
-      5. ONLY output the translated audio.
-      6. Maintain a neutral, professional tone.
+      User Context:
+      - You are listening to the ${options.userRole}.
+      - The ${options.userRole} speaks ${options.userLanguage}.
+      - The other party speaks ${options.targetLanguage}.
+
+      Your Task:
+      1. Listen to the input audio (in ${options.userLanguage}).
+      2. Translate it immediately into ${options.targetLanguage}.
+      3. Output ONLY the spoken translation. 
+      4. DO NOT reply to the user. DO NOT answer questions. DO NOT say "Okay" or "Translated:".
+      5. Just repeat what was said in the target language.
     `;
 
     try {
@@ -50,7 +54,6 @@ export class GeminiLiveService {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          // inputAudioTranscription and outputAudioTranscription must be empty objects to enable feature using default model
           inputAudioTranscription: { },
           outputAudioTranscription: { },
         },
@@ -62,13 +65,13 @@ export class GeminiLiveService {
             onmessage: async (message: LiveServerMessage) => {
                 // Handle Audio
                 const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-                if (base64Audio && this.outputAudioContext) {
-                    const audioBytes = base64ToUint8Array(base64Audio);
-                    const audioBuffer = await decodeAudioData(audioBytes, this.outputAudioContext);
-                    options.onAudioData(audioBuffer);
+                if (base64Audio) {
+                    // We DO NOT decode here. We pass the raw base64 to the hook.
+                    // The hook will broadcast it to the other tab.
+                    options.onAudioData(base64Audio);
                 }
 
-                // Handle Transcriptions for UI
+                // Handle Transcriptions
                 if (message.serverContent?.inputTranscription?.text) {
                     options.onTranscript(message.serverContent.inputTranscription.text, true);
                 }
@@ -138,7 +141,5 @@ export class GeminiLiveService {
     if (this.outputAudioContext) {
         this.outputAudioContext.close();
     }
-    // We can't strictly "close" the session promise object, but stopping audio handling effectively kills the loop.
-    // In a full implementation we would call a close method if exposed, but currently we rely on cutting the stream.
   }
 }

@@ -4,7 +4,9 @@ import { Language } from '../types';
 export type SignalingMessage = 
   | { type: 'CALL_STARTED'; customerId: string; language: Language }
   | { type: 'CALL_ACCEPTED'; customerId: string; agentLanguage: Language }
-  | { type: 'CALL_ENDED'; customerId: string };
+  | { type: 'CALL_ENDED'; customerId: string }
+  | { type: 'AUDIO_CHUNK'; customerId: string; senderRole: 'CUSTOMER' | 'AGENT'; data: string } // Base64 Audio
+  | { type: 'TRANSCRIPT'; customerId: string; senderRole: 'CUSTOMER' | 'AGENT'; text: string; isTranslation: boolean };
 
 class SignalingService {
   private channel: BroadcastChannel;
