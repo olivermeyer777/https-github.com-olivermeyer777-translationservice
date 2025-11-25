@@ -58,7 +58,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
-  // 1. Device Management
+  // 1. Device Management (Safe)
   const { config, setConfig, activeStream, devices, refreshDevices } = useMediaDevices();
   
   // 2. Translator Logic
@@ -93,7 +93,8 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   const handleEndCall = () => {
       disconnectGemini();
       setInCall(false);
-      // Optional: Redirect to landing or reset state
+      // Optional: Refresh to reset states entirely
+      window.location.reload();
   };
 
   // Toggle Mute
@@ -111,16 +112,22 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
       }
   }, [isCamOn, activeStream]);
 
-  // Attach Streams to DOM
+  // Attach Streams to DOM (Carefully to avoid flicker)
   useEffect(() => {
-      if (localVideoRef.current && activeStream) {
-          localVideoRef.current.srcObject = activeStream;
+      if (localVideoRef.current) {
+          if (activeStream && localVideoRef.current.srcObject !== activeStream) {
+             localVideoRef.current.srcObject = activeStream;
+          } else if (!activeStream) {
+             localVideoRef.current.srcObject = null;
+          }
       }
-  }, [activeStream, isCamOn]);
+  }, [activeStream]);
 
   useEffect(() => {
-      if (remoteVideoRef.current && remoteStream) {
-          remoteVideoRef.current.srcObject = remoteStream;
+      if (remoteVideoRef.current) {
+           if (remoteStream && remoteVideoRef.current.srcObject !== remoteStream) {
+                remoteVideoRef.current.srcObject = remoteStream;
+           }
       }
   }, [remoteStream]);
 
@@ -215,16 +222,14 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                 )}
 
                 {/* Local Video PIP (Top Left) */}
-                <div className="absolute top-6 left-6 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10">
-                    {activeStream ? (
-                         <video 
-                            ref={localVideoRef} 
-                            autoPlay 
-                            muted 
-                            playsInline 
-                            className={`w-full h-full object-cover ${!isCamOn ? 'hidden' : ''}`} 
-                        />
-                    ) : null}
+                <div className="absolute top-6 left-6 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10 transition-all duration-300 hover:scale-105">
+                    <video 
+                        ref={localVideoRef} 
+                        autoPlay 
+                        muted 
+                        playsInline 
+                        className={`w-full h-full object-cover transform scale-x-[-1] ${!isCamOn ? 'hidden' : ''}`} 
+                    />
                     {!isCamOn && (
                         <div className="w-full h-full flex items-center justify-center bg-gray-800">
                             <Icons.Video on={false} />
@@ -238,13 +243,13 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
 
                 {/* Notifications / Status */}
                 {geminiError && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-lg text-sm backdrop-blur-sm shadow-lg">
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-lg text-sm backdrop-blur-sm shadow-lg z-50">
                         {geminiError}
                     </div>
                 )}
                 
                 {targetLanguage && !remoteStream && (
-                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#FFCC00] text-black px-4 py-2 rounded-full text-sm font-bold shadow-lg animate-fade-in-down">
+                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#FFCC00] text-black px-4 py-2 rounded-full text-sm font-bold shadow-lg animate-fade-in-down z-40">
                         Partner Connected ({targetLanguage.name}) - Establishing Video...
                     </div>
                 )}
@@ -256,7 +261,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f8fafc]">
                         <h3 className="font-bold text-sm uppercase tracking-wider text-gray-500">Live Transcript</h3>
                         <button onClick={() => setShowTranscript(false)} className="text-gray-400 hover:text-gray-600">
-                             <Icons.PhoneX /> {/* Close icon reused */}
+                             <Icons.PhoneX /> 
                         </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans">
@@ -284,7 +289,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
         <div className="h-20 bg-[#1e1e1e] border-t border-white/5 flex items-center justify-between px-6 z-20 shrink-0">
             {/* Left: Metadata */}
             <div className="flex items-center gap-4 text-sm font-medium text-gray-300 w-1/3">
-                 <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                 <div className={`h-2 w-2 rounded-full ${isGeminiConnected ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500'}`}></div>
                  {role === UserRole.CUSTOMER ? 'Video-Beratung' : 'Client Consultation'}
                  <span className="text-gray-600">|</span>
                  {selectedLang.flag} {selectedLang.name}
@@ -294,14 +299,14 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
             <div className="flex items-center gap-3">
                 <button 
                     onClick={() => setIsMicOn(!isMicOn)}
-                    className={`p-4 rounded-full transition-all duration-200 ${isMicOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
+                    className={`p-4 rounded-full transition-all duration-200 shadow-lg ${isMicOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
                 >
                     <Icons.Mic on={isMicOn} />
                 </button>
 
                 <button 
                     onClick={() => setIsCamOn(!isCamOn)}
-                    className={`p-4 rounded-full transition-all duration-200 ${isCamOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
+                    className={`p-4 rounded-full transition-all duration-200 shadow-lg ${isCamOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
                 >
                     <Icons.Video on={isCamOn} />
                 </button>
@@ -310,7 +315,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
 
                 <Button 
                     onClick={handleEndCall}
-                    className="!rounded-full px-8 bg-red-600 hover:bg-red-700 border-none text-white h-12"
+                    className="!rounded-full px-8 bg-red-600 hover:bg-red-700 border-none text-white h-12 shadow-red-900/50 shadow-lg"
                 >
                     <Icons.PhoneX />
                 </Button>
@@ -411,8 +416,6 @@ const Launcher: React.FC = () => {
     </div>
   );
 };
-
-// --- ROUTER ---
 
 export default function App() {
   const [role, setRole] = useState<UserRole | null>(null);

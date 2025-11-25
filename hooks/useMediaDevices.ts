@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MediaDevice, DeviceConfig } from '../types';
 
 export const useMediaDevices = () => {
@@ -10,27 +10,18 @@ export const useMediaDevices = () => {
     audioInputId: '',
     audioOutputId: ''
   });
+  
+  const streamRef = useRef<MediaStream | null>(null);
+  const isMounted = useRef(true);
 
+  // Simple enumerate without forcing permissions (prevents conflict with startCamera)
   const getDevices = useCallback(async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-        console.warn("MediaDevices API not supported");
-        return;
-    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
 
     try {
-      // 1. Try to get permission to read labels
-      // We wrap this in a try/catch so we don't crash if permission is denied
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        // Stop immediately, we just wanted the labels
-        stream.getTracks().forEach(track => track.stop());
-      } catch (err) {
-        console.warn("Permission denied for media devices. Labels will be empty or generic.", err);
-        // Continue execution to at least get device IDs (even if unlabelled)
-      }
-      
-      // 2. Enumerate
       const enumerate = await navigator.mediaDevices.enumerateDevices();
+      if (!isMounted.current) return;
+
       const mapped = enumerate.map(d => ({
         deviceId: d.deviceId,
         label: d.label || `${d.kind} (${d.deviceId.slice(0, 5)}...)`,
@@ -38,67 +29,91 @@ export const useMediaDevices = () => {
       }));
       setDevices(mapped);
 
-      // 3. Set Defaults (prefer existing config, then first available)
-      setConfig(prev => ({
-        videoInputId: prev.videoInputId || mapped.find(d => d.kind === 'videoinput')?.deviceId || '',
-        audioInputId: prev.audioInputId || mapped.find(d => d.kind === 'audioinput')?.deviceId || '',
-        audioOutputId: prev.audioOutputId || mapped.find(d => d.kind === 'audiooutput')?.deviceId || '',
-      }));
+      // Only set default config if we haven't selected anything yet
+      setConfig(prev => {
+        if (prev.videoInputId && prev.audioInputId) return prev;
+        
+        return {
+            videoInputId: prev.videoInputId || mapped.find(d => d.kind === 'videoinput')?.deviceId || '',
+            audioInputId: prev.audioInputId || mapped.find(d => d.kind === 'audioinput')?.deviceId || '',
+            audioOutputId: prev.audioOutputId || mapped.find(d => d.kind === 'audiooutput')?.deviceId || '',
+        };
+      });
     } catch (e) {
       console.error("Error enumerating devices", e);
     }
   }, []);
 
   const startCamera = useCallback(async (videoDeviceId?: string) => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return null;
-    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return null;
     
+    // Stop existing stream first to release hardware
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+    }
+
     try {
-        const constraints: MediaStreamConstraints = {
-            video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
-            audio: false 
-        };
-        
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        
-        setActiveStream(prev => {
-            // Stop previous stream tracks
-            if (prev) prev.getTracks().forEach(t => t.stop());
-            return stream;
+        // If a specific ID is requested, use it. Otherwise use generic 'true' (any camera).
+        // Note: 'exact' constraint can fail if the device is unavailable, so we fallback if needed.
+        const videoConstraint = videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true;
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: videoConstraint,
+            audio: false // We handle audio separately in the Gemini Service usually, or here if needed for WebRTC
         });
+        
+        if (!isMounted.current) {
+            stream.getTracks().forEach(t => t.stop());
+            return null;
+        }
+
+        streamRef.current = stream;
+        setActiveStream(stream);
+        
+        // Once we successfully got a stream, we have permission! 
+        // Re-enumerate to get the labels (now that we are trusted).
+        getDevices();
+        
         return stream;
     } catch (e: any) {
-        // Gracefully handle permission denied errors
-        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-            console.warn("Camera start failed: Permission denied by user.");
-        } else {
-            console.error("Failed to start camera", e);
-        }
+        console.warn("Camera start failed:", e);
+        if (isMounted.current) setActiveStream(null);
         return null;
     }
-  }, []);
-
-  useEffect(() => {
-    getDevices();
-    
-    // Cleanup on unmount
-    return () => {
-        setActiveStream(prev => {
-            if (prev) prev.getTracks().forEach(t => t.stop());
-            return null;
-        });
-    };
   }, [getDevices]);
 
-  // Restart camera when config changes
+  // Initial mount setup
   useEffect(() => {
-      // If we have a specific ID, use it. If empty string, try default (true)
-      if (config.videoInputId) {
-          startCamera(config.videoInputId);
-      } else {
-          startCamera();
-      }
+    isMounted.current = true;
+    
+    // 1. First just get the list (likely without labels)
+    getDevices();
+    
+    // 2. Start the camera with default settings. 
+    // This prompts the user. Once accepted, startCamera calls getDevices AGAIN to fill in labels.
+    startCamera();
+
+    return () => {
+        isMounted.current = false;
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop());
+        }
+    };
+  }, []); // Run once on mount
+
+  // Watch for config changes
+  useEffect(() => {
+     if (!isMounted.current) return;
+     // Only restart if the ID is different from the currently active track setting (optimization)
+     // For now, simpler to just restart if config.videoInputId changes and it's not empty
+     if (config.videoInputId && streamRef.current) {
+         const currentTrack = streamRef.current.getVideoTracks()[0];
+         const currentSettings = currentTrack?.getSettings();
+         if (currentSettings?.deviceId !== config.videoInputId) {
+             startCamera(config.videoInputId);
+         }
+     }
   }, [config.videoInputId, startCamera]);
 
   return {

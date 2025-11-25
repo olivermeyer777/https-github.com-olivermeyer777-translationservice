@@ -16,7 +16,7 @@ class SignalingService {
     this.channel = new BroadcastChannel('postbranch_room_v2');
     this.channel.onmessage = (event) => {
       // Filter out high-volume messages from debug log
-      if (event.data.type !== 'AUDIO_CHUNK' && event.data.type !== 'WEBRTC_SIGNAL') {
+      if (event.data.type !== 'AUDIO_CHUNK' && event.data.type !== 'WEBRTC_SIGNAL' && event.data.type !== 'PING') {
          console.debug('Signal received:', event.data);
       }
       this.listeners.forEach(l => l(event.data));

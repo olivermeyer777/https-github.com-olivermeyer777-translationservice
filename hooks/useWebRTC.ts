@@ -6,19 +6,21 @@ import { UserRole } from '../types';
 interface UseWebRTCProps {
   userRole: UserRole;
   localStream: MediaStream | null;
-  isConnectedToRoom: boolean; // Only start when "Room" logic is agreed via PING
+  isConnectedToRoom: boolean; 
 }
 
 export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRTCProps) => {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const isInitiator = userRole === UserRole.CUSTOMER; // Customer initiates the call offer
+  const isInitiator = userRole === UserRole.CUSTOMER;
+  const hasNegotiatedRef = useRef(false);
 
   const createPeerConnection = useCallback(() => {
     if (pcRef.current) return pcRef.current;
 
+    console.log("WebRTC: Creating new PeerConnection");
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Standard public STUN
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
 
     pc.onicecandidate = (event) => {
@@ -36,10 +38,14 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
       setRemoteStream(event.streams[0]);
     };
 
-    // Add local tracks if we have them
+    // Add local tracks if available
     if (localStream) {
       localStream.getTracks().forEach(track => {
-        pc.addTrack(track, localStream);
+        try {
+            pc.addTrack(track, localStream);
+        } catch(e) {
+            console.warn("Error adding track", e);
+        }
       });
     }
 
@@ -52,16 +58,23 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
     const handleSignal = async (msg: SignalingMessage) => {
       if (msg.type !== 'WEBRTC_SIGNAL' || msg.senderRole === userRole) return;
       
-      // Ensure we have local stream before answering if possible, or at least created the PC
-      const pc = pcRef.current || createPeerConnection();
       const { signal } = msg;
+
+      // Create PC if it doesn't exist (Customer created it eagerly, Agent creates it lazily upon Offer)
+      const pc = pcRef.current || createPeerConnection();
 
       try {
         if (signal.type === 'OFFER') {
           console.log("WebRTC: Received Offer");
+          if (pc.signalingState !== 'stable') {
+              // If we are already negotiating, ignore or reset. For simple p2p, we can ignore collision for now or reset.
+              console.warn("WebRTC: Received offer while not stable. Ignoring for collision.");
+              // return; // Simple collision handling: if I'm Agent and I receive Offer, I accept.
+          }
+
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
           
-          // Add tracks if they weren't added during create (e.g. if created just now)
+          // Ensure we send our video back!
           if (localStream && pc.getSenders().length === 0) {
              localStream.getTracks().forEach(track => {
                  pc.addTrack(track, localStream);
@@ -82,7 +95,11 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
         } 
         else if (signal.type === 'CANDIDATE') {
-          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          try {
+             await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          } catch(e) {
+              // Candidate might arrive before remote description, which is fine to fail in strict mode or just queue
+          }
         }
       } catch (err) {
         console.error("WebRTC Signaling Error", err);
@@ -93,10 +110,13 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
     return cleanup;
   }, [userRole, createPeerConnection, localStream]);
 
-  // Initiate Offer (Only if initiator, room is connected, AND local stream is ready)
+  // Initiate Offer (Only Customer)
   useEffect(() => {
-    if (isConnectedToRoom && isInitiator && !pcRef.current && localStream) {
+    if (isConnectedToRoom && isInitiator && !hasNegotiatedRef.current && localStream) {
       const startCall = async () => {
+        // Double check we haven't started
+        if (pcRef.current && pcRef.current.signalingState !== 'stable') return;
+
         const pc = createPeerConnection();
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
@@ -107,28 +127,28 @@ export const useWebRTC = ({ userRole, localStream, isConnectedToRoom }: UseWebRT
           senderRole: userRole,
           signal: { type: 'OFFER', sdp: offer }
         });
+        hasNegotiatedRef.current = true;
       };
       
-      // Small delay to ensure other side is likely ready
-      setTimeout(startCall, 1500);
+      // Delay slightly to let socket/room settle
+      const timer = setTimeout(startCall, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [isConnectedToRoom, isInitiator, createPeerConnection, userRole, localStream]);
+  }, [isConnectedToRoom, isInitiator, createPeerConnection, localStream]);
 
-  // Update tracks if local stream changes mid-call
+  // Handle Local Stream replacements (e.g. changing camera)
   useEffect(() => {
       const pc = pcRef.current;
       if (pc && localStream) {
           const senders = pc.getSenders();
           const videoSender = senders.find(s => s.track?.kind === 'video');
-          
           const newVideoTrack = localStream.getVideoTracks()[0];
           
-          if (videoSender && newVideoTrack) {
-              videoSender.replaceTrack(newVideoTrack);
+          if (videoSender && newVideoTrack && videoSender.track?.id !== newVideoTrack.id) {
+              console.log("WebRTC: Replacing Video Track");
+              videoSender.replaceTrack(newVideoTrack).catch(err => console.error("Failed to replace track", err));
           } else if (newVideoTrack && senders.length === 0) {
-             // If we had no tracks before, we might need renegotiation if we add one now.
-             // But simpler to just add it.
-             pc.addTrack(newVideoTrack, localStream);
+              pc.addTrack(newVideoTrack, localStream);
           }
       }
   }, [localStream]);
