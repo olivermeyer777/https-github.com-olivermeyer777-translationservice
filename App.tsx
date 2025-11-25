@@ -291,6 +291,9 @@ function SessionView({
 
     const isAgent = userRole === UserRole.AGENT;
     
+    // Helper to get API Key for warning
+    const getApiKey = () => process.env.API_KEY;
+
     // Using generic stock videos for a "live" feel
     const remoteVideoSrc = isAgent 
         ? 'https://cdn.coverr.co/videos/coverr-woman-working-on-her-laptop-at-home-4752/1080p.mp4' // Generic home user for Agent to see
@@ -300,7 +303,7 @@ function SessionView({
         <div className="relative w-full h-screen bg-[#202124] overflow-hidden flex flex-col text-white font-sans">
             
             {/* Warning Banner */}
-            {(!process.env.API_KEY || error) && (
+            {(!getApiKey() || error) && (
                 <div className="absolute top-0 left-0 w-full z-[100] bg-red-600 text-white text-center py-2 text-sm font-medium flex items-center justify-center gap-2">
                     <ExclamationTriangleIcon />
                     {error || "API Key missing. Translation will not work."}

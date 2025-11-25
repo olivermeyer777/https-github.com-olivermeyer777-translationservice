@@ -25,11 +25,7 @@ export class GeminiLiveService {
   private isConnected: boolean = false;
   
   constructor() {
-    const key = process.env.API_KEY || '';
-    if (!key) {
-      console.error("API_KEY is missing in process.env");
-    }
-    this.ai = new GoogleGenAI({ apiKey: key });
+    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   public setMuted(muted: boolean) {
@@ -38,7 +34,7 @@ export class GeminiLiveService {
 
   public async connect(options: ConnectOptions) {
     if (!process.env.API_KEY) {
-        options.onError(new Error("API Key is missing"));
+        options.onError(new Error("API Key is missing."));
         return;
     }
 
