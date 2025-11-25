@@ -13,7 +13,9 @@ export const useMediaDevices = () => {
   
   const streamRef = useRef<MediaStream | null>(null);
   const isMounted = useRef(true);
-  const pendingStart = useRef<string | null>(null);
+
+  // We use a request ID to ensure we only handle the result of the latest request
+  const lastRequestId = useRef<number>(0);
 
   const getDevices = useCallback(async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
@@ -44,15 +46,8 @@ export const useMediaDevices = () => {
   const startCamera = useCallback(async (videoDeviceId?: string) => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return null;
     
-    // Prevent overlapping start calls
-    if (pendingStart.current === videoDeviceId) return null;
-    pendingStart.current = videoDeviceId || 'default';
-
-    // Stop previous
-    if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-        streamRef.current = null;
-    }
+    const requestId = Date.now();
+    lastRequestId.current = requestId;
 
     try {
         const videoConstraint = videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true;
@@ -61,21 +56,29 @@ export const useMediaDevices = () => {
             audio: false 
         });
         
-        if (!isMounted.current) {
+        // If a newer request started while we were waiting, or component unmounted
+        if (lastRequestId.current !== requestId || !isMounted.current) {
             stream.getTracks().forEach(t => t.stop());
             return null;
         }
 
+        // Stop old stream if it exists
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(t => t.stop());
+        }
+
         streamRef.current = stream;
         setActiveStream(stream);
+        
+        // Refresh devices now that we have permissions (labels will be available)
         getDevices();
         return stream;
     } catch (e: any) {
         console.warn("Camera start failed:", e);
-        if (isMounted.current) setActiveStream(null);
+        if (lastRequestId.current === requestId && isMounted.current) {
+            setActiveStream(null);
+        }
         return null;
-    } finally {
-        pendingStart.current = null;
     }
   }, [getDevices]);
 
@@ -97,6 +100,7 @@ export const useMediaDevices = () => {
      if (!isMounted.current) return;
      if (config.videoInputId && streamRef.current) {
          const currentTrack = streamRef.current.getVideoTracks()[0];
+         // Only restart if the ID actually changed
          if (currentTrack?.getSettings().deviceId !== config.videoInputId) {
              startCamera(config.videoInputId);
          }

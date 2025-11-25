@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AppState, Language, UserRole } from './types';
 import { DEFAULT_AGENT_LANGUAGE, DEFAULT_CUSTOMER_LANGUAGE, SUPPORTED_LANGUAGES } from './constants';
 import { Button } from './components/Button';
@@ -62,9 +62,6 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   const [isCamOn, setIsCamOn] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [roomId, setRoomId] = useState<string>('');
-
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   // Initialize Room ID from URL
   useEffect(() => {
@@ -129,24 +126,22 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
       }
   }, [isCamOn, activeStream]);
 
-  // Attach Streams to DOM
-  useEffect(() => {
-      if (localVideoRef.current) {
-          if (activeStream && localVideoRef.current.srcObject !== activeStream) {
-             localVideoRef.current.srcObject = activeStream;
-          } else if (!activeStream) {
-             localVideoRef.current.srcObject = null;
-          }
-      }
+  // Use callback refs to ensure streams are attached immediately when elements mount
+  const setLocalVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    if (node) {
+        node.srcObject = activeStream;
+        // Explicitly play to avoid autoplay policy issues if needed
+        node.play().catch(() => {});
+    }
   }, [activeStream]);
 
-  useEffect(() => {
-      if (remoteVideoRef.current) {
-           if (remoteStream && remoteVideoRef.current.srcObject !== remoteStream) {
-                remoteVideoRef.current.srcObject = remoteStream;
-           }
-      }
+  const setRemoteVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    if (node) {
+        node.srcObject = remoteStream;
+        node.play().catch(() => {});
+    }
   }, [remoteStream]);
+
 
   // -- PRE-CALL (Language Selection) --
   if (!inCall) {
@@ -219,7 +214,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
             <div className="flex-1 relative bg-[#202124] flex items-center justify-center">
                 {remoteStream ? (
                     <video 
-                        ref={remoteVideoRef}
+                        ref={setRemoteVideoRef}
                         autoPlay 
                         playsInline 
                         className="w-full h-full object-contain"
@@ -246,7 +241,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                 {/* Local Video PIP */}
                 <div className="absolute top-6 left-6 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10 transition-all duration-300 hover:scale-105">
                     <video 
-                        ref={localVideoRef} 
+                        ref={setLocalVideoRef} 
                         autoPlay 
                         muted 
                         playsInline 
