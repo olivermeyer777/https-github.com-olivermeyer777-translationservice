@@ -10,6 +10,7 @@ import { Visualizer } from './components/Visualizer';
 import { useMediaDevices } from './hooks/useMediaDevices';
 import { SettingsModal } from './components/SettingsModal';
 import { getApiKey } from './services/geminiService';
+import { signaling } from './services/signalingService';
 
 // --- ICONS (Clean, Modern, Flat, Lucide Style) ---
 const Icons = {
@@ -43,6 +44,9 @@ const Icons = {
     ),
     AlertTriangle: () => (
        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-600"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    ),
+    Share: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
     )
 };
 
@@ -57,9 +61,20 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCamOn, setIsCamOn] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [roomId, setRoomId] = useState<string>('');
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Initialize Room ID from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room');
+    if (room) {
+        setRoomId(room);
+        signaling.join(room);
+    }
+  }, []);
 
   // 1. Device Management (Safe)
   const { config, setConfig, activeStream, devices, refreshDevices } = useMediaDevices();
@@ -96,7 +111,6 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   const handleEndCall = () => {
       disconnectGemini();
       setInCall(false);
-      // Optional: Refresh to reset states entirely
       window.location.reload();
   };
 
@@ -115,7 +129,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
       }
   }, [isCamOn, activeStream]);
 
-  // Attach Streams to DOM (Carefully to avoid flicker)
+  // Attach Streams to DOM
   useEffect(() => {
       if (localVideoRef.current) {
           if (activeStream && localVideoRef.current.srcObject !== activeStream) {
@@ -138,11 +152,15 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   if (!inCall) {
       return (
           <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-              {/* Swiss Post Header */}
               <div className="h-2 bg-[#FFCC00] w-full" />
-              <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4">
-                  <div className="w-10 h-10 bg-[#FFCC00] flex items-center justify-center font-bold text-xl rounded-sm">P</div>
-                  <h1 className="text-xl font-bold tracking-tight text-black">PostBranch Video-Schalter</h1>
+              <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                     <div className="w-10 h-10 bg-[#FFCC00] flex items-center justify-center font-bold text-xl rounded-sm">P</div>
+                     <h1 className="text-xl font-bold tracking-tight text-black">PostBranch Video-Schalter</h1>
+                  </div>
+                  <div className="text-sm font-mono text-gray-500 bg-gray-100 px-3 py-1 rounded">
+                      Room: {roomId || '...'}
+                  </div>
               </header>
 
               <main className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
@@ -182,7 +200,6 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
   // -- ACTIVE CALL ROOM --
   return (
       <div className="fixed inset-0 bg-[#202124] flex flex-col text-white overflow-hidden">
-        {/* Settings Modal */}
         <SettingsModal 
             isOpen={isSettingsOpen} 
             onClose={() => setIsSettingsOpen(false)}
@@ -191,16 +208,14 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
             setConfig={setConfig}
         />
 
-        {/* Warning if no API Key */}
         {!getApiKey() && (
             <div className="absolute top-0 left-0 right-0 z-50 bg-red-600 text-white text-xs py-1 px-4 text-center font-mono">
                 API KEY MISSING - PLEASE CHECK VITE_API_KEY
             </div>
         )}
 
-        {/* Main Video Area */}
         <div className="flex-1 relative min-h-0 flex">
-            {/* Center: Remote Video */}
+            {/* Remote Video */}
             <div className="flex-1 relative bg-[#202124] flex items-center justify-center">
                 {remoteStream ? (
                     <video 
@@ -216,15 +231,19 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                                 {role === UserRole.CUSTOMER ? 'Agent' : 'Client'}
                             </span>
                         </div>
-                        <p className="text-lg font-light tracking-wide">
+                        <p className="text-lg font-light tracking-wide text-center">
                             {targetLanguage 
-                                ? `Connecting to ${role === UserRole.CUSTOMER ? 'Agent' : 'Customer'}...`
-                                : 'Waiting for participant to join...'}
+                                ? `Connected to ${targetLanguage.name} Speaker...`
+                                : 'Waiting for participant...'}
+                            <br/>
+                            <span className="text-xs font-mono mt-2 block bg-gray-800 px-2 py-1 rounded inline-block">
+                                Room ID: {roomId}
+                            </span>
                         </p>
                     </div>
                 )}
 
-                {/* Local Video PIP (Top Left) */}
+                {/* Local Video PIP */}
                 <div className="absolute top-6 left-6 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10 transition-all duration-300 hover:scale-105">
                     <video 
                         ref={localVideoRef} 
@@ -244,7 +263,7 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                     </div>
                 </div>
 
-                {/* Notifications / Status */}
+                {/* Status Pills */}
                 {geminiError && (
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-lg text-sm backdrop-blur-sm shadow-lg z-50">
                         {geminiError}
@@ -253,12 +272,12 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                 
                 {targetLanguage && !remoteStream && (
                      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#FFCC00] text-black px-4 py-2 rounded-full text-sm font-bold shadow-lg animate-fade-in-down z-40">
-                        Partner Connected ({targetLanguage.name}) - Establishing Video...
+                        Partner Connected ({targetLanguage.name})
                     </div>
                 )}
             </div>
 
-            {/* Right Sidebar: Transcript */}
+            {/* Transcript */}
             {showTranscript && (
                 <div className="w-80 bg-white border-l border-gray-200 flex flex-col text-gray-900 animate-slide-in-right">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f8fafc]">
@@ -288,9 +307,8 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
             )}
         </div>
 
-        {/* Bottom Control Bar */}
+        {/* Control Bar */}
         <div className="h-20 bg-[#1e1e1e] border-t border-white/5 flex items-center justify-between px-6 z-20 shrink-0">
-            {/* Left: Metadata */}
             <div className="flex items-center gap-4 text-sm font-medium text-gray-300 w-1/3">
                  <div className={`h-2 w-2 rounded-full ${isGeminiConnected ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500'}`}></div>
                  {role === UserRole.CUSTOMER ? 'Video-Beratung' : 'Client Consultation'}
@@ -298,7 +316,6 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                  {selectedLang.flag} {selectedLang.name}
             </div>
 
-            {/* Center: Controls */}
             <div className="flex items-center gap-3">
                 <button 
                     onClick={() => setIsMicOn(!isMicOn)}
@@ -324,7 +341,6 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
                 </Button>
             </div>
 
-            {/* Right: Tools */}
             <div className="flex items-center justify-end gap-3 w-1/3">
                  <button 
                     onClick={() => setShowTranscript(!showTranscript)}
@@ -349,45 +365,46 @@ const SessionView: React.FC<{ role: UserRole }> = ({ role }) => {
 // --- LAUNCHER ---
 
 const Launcher: React.FC = () => {
+  const [generatedRoomId] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
+
   const handleStart = (role: UserRole) => {
     const url = new URL(window.location.href);
     url.searchParams.set('role', role === UserRole.CUSTOMER ? 'customer' : 'agent');
+    // Set a room ID if not present
+    if (!url.searchParams.has('room')) {
+        url.searchParams.set('room', generatedRoomId);
+    }
     window.open(url.toString(), '_blank');
   };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-        {/* Swiss Post Header */}
         <div className="h-2 bg-[#FFCC00] w-full" />
         <header className="bg-white border-b border-gray-200 px-8 py-5 flex items-center justify-between">
              <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-[#FFCC00] flex items-center justify-center font-bold text-2xl rounded-sm text-black">P</div>
                   <div>
                       <h1 className="text-xl font-bold tracking-tight text-black">PostBranch Connect</h1>
-                      <p className="text-xs text-gray-500 uppercase tracking-widest">Prototype</p>
                   </div>
+             </div>
+             <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded font-mono text-sm border border-yellow-200">
+                Session ID: {generatedRoomId}
              </div>
         </header>
         
-        {/* Local Demo Warning Banner */}
-        <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 flex items-center justify-center gap-2 text-yellow-800 text-sm">
-             <Icons.AlertTriangle />
-             <span className="font-semibold">Local Demo Only:</span> 
-             This prototype uses local signaling (BroadcastChannel) and only works when both tabs are open on the same device/browser.
+        <div className="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-center gap-2 text-blue-800 text-sm">
+             <Icons.Share />
+             <span className="font-semibold">Cross-Device Ready:</span> 
+             Use Session ID <b>{generatedRoomId}</b> to connect from any device.
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
              <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Customer Card */}
                   <div className="group relative bg-white rounded-3xl p-10 shadow-lg hover:shadow-2xl transition-all duration-300 border border-transparent hover:border-yellow-400 flex flex-col items-center text-center">
                        <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-500 mb-6 group-hover:scale-110 transition-transform">
                             <Icons.User />
                        </div>
                        <h2 className="text-3xl font-bold text-gray-900 mb-4">Customer Kiosk</h2>
-                       <p className="text-gray-600 mb-10 leading-relaxed">
-                          Launch the customer-facing interface for the video booth.
-                          <br/><span className="text-sm opacity-70">Optimized for Touch Screens</span>
-                       </p>
                        <Button 
                           onClick={() => handleStart(UserRole.CUSTOMER)}
                           variant="post-yellow"
@@ -398,16 +415,11 @@ const Launcher: React.FC = () => {
                        </Button>
                   </div>
 
-                  {/* Agent Card */}
                   <div className="group relative bg-white rounded-3xl p-10 shadow-lg hover:shadow-2xl transition-all duration-300 border border-transparent hover:border-blue-400 flex flex-col items-center text-center">
                         <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform">
                             <Icons.Briefcase />
                        </div>
                        <h2 className="text-3xl font-bold text-gray-900 mb-4">Agent Portal</h2>
-                       <p className="text-gray-600 mb-10 leading-relaxed">
-                          Launch the employee dashboard to answer calls.
-                          <br/><span className="text-sm opacity-70">Desktop Optimization</span>
-                       </p>
                        <Button 
                           onClick={() => handleStart(UserRole.AGENT)}
                           variant="secondary"
@@ -421,7 +433,7 @@ const Launcher: React.FC = () => {
         </div>
         
         <footer className="text-center py-6 text-gray-400 text-sm">
-            Powered by Google Gemini 2.5 Live API & WebRTC
+            Powered by Google Gemini 2.5 Live API & WebRTC (via MQTT Signaling)
         </footer>
     </div>
   );
