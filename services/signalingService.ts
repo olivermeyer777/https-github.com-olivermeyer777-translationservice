@@ -1,11 +1,12 @@
 
-import { Language, UserRole } from '../types';
+import { Language, UserRole, WebRTCSignal } from '../types';
 
 export type SignalingMessage = 
-  | { type: 'PING'; role: UserRole; language: Language } // PING now carries language
+  | { type: 'PING'; role: UserRole; language: Language } 
   | { type: 'JOIN_ROOM'; role: UserRole; language: Language }
   | { type: 'AUDIO_CHUNK'; senderRole: UserRole; data: string } // Base64 Audio
-  | { type: 'TRANSCRIPT'; senderRole: UserRole; text: string; isTranslation: boolean };
+  | { type: 'TRANSCRIPT'; senderRole: UserRole; text: string; isTranslation: boolean }
+  | { type: 'WEBRTC_SIGNAL'; senderRole: UserRole; signal: WebRTCSignal };
 
 class SignalingService {
   private channel: BroadcastChannel;
@@ -14,8 +15,8 @@ class SignalingService {
   constructor() {
     this.channel = new BroadcastChannel('postbranch_room_v2');
     this.channel.onmessage = (event) => {
-      // Debug log enabled for troubleshooting connectivity
-      if (event.data.type !== 'AUDIO_CHUNK') {
+      // Filter out high-volume messages from debug log
+      if (event.data.type !== 'AUDIO_CHUNK' && event.data.type !== 'WEBRTC_SIGNAL') {
          console.debug('Signal received:', event.data);
       }
       this.listeners.forEach(l => l(event.data));

@@ -28,3 +28,8 @@ export interface MediaDevice {
   label: string;
   kind: MediaDeviceKind;
 }
+
+export type WebRTCSignal = 
+  | { type: 'OFFER'; sdp: RTCSessionDescriptionInit }
+  | { type: 'ANSWER'; sdp: RTCSessionDescriptionInit }
+  | { type: 'CANDIDATE'; candidate: RTCIceCandidateInit };

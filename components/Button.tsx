@@ -2,7 +2,7 @@
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'pulse' | 'glass';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'pulse' | 'glass' | 'post-yellow';
   size?: 'sm' | 'md' | 'lg' | 'xl';
   fullWidth?: boolean;
   icon?: React.ReactNode;
@@ -17,15 +17,16 @@ export const Button: React.FC<ButtonProps> = ({
   icon,
   ...props 
 }) => {
-  const baseStyles = "relative font-semibold rounded-full transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95";
+  const baseStyles = "relative font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]";
   
   const variants = {
-    primary: "bg-yellow-400 hover:bg-yellow-500 text-gray-900 focus:ring-yellow-400 shadow-[0_4px_14px_0_rgba(250,204,21,0.39)] hover:shadow-[0_6px_20px_rgba(250,204,21,0.23)] border border-yellow-400",
-    secondary: "bg-slate-800 hover:bg-slate-700 text-white focus:ring-slate-500 shadow-lg shadow-slate-800/20",
-    danger: "bg-red-500 hover:bg-red-600 text-white focus:ring-red-500 shadow-lg shadow-red-500/30",
-    ghost: "bg-transparent hover:bg-gray-100 text-gray-600 hover:text-gray-900",
-    pulse: "bg-green-600 hover:bg-green-700 text-white animate-pulse shadow-lg hover:animate-none ring-4 ring-green-600/20",
-    glass: "bg-white/20 hover:bg-white/30 backdrop-blur-md text-white border border-white/30 shadow-lg",
+    primary: "bg-[#FFCC00] hover:bg-[#ffda33] text-black rounded-sm border-b-2 border-yellow-500",
+    "post-yellow": "bg-[#FFCC00] text-black hover:brightness-105 rounded-none",
+    secondary: "bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-sm",
+    danger: "bg-red-600 hover:bg-red-700 text-white rounded-full",
+    ghost: "bg-transparent hover:bg-gray-100 text-gray-600 hover:text-gray-900 rounded-md",
+    pulse: "bg-green-600 hover:bg-green-700 text-white animate-pulse rounded-full",
+    glass: "bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/20 rounded-full",
   };
 
   const sizes = {

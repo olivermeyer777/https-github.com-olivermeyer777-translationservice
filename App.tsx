@@ -4,537 +4,448 @@ import { AppState, Language, UserRole } from './types';
 import { DEFAULT_AGENT_LANGUAGE, DEFAULT_CUSTOMER_LANGUAGE, SUPPORTED_LANGUAGES } from './constants';
 import { Button } from './components/Button';
 import { LanguageSelector } from './components/LanguageSelector';
-import { useGeminiTranslator } from './hooks/useGeminiTranslator';
+import { useGeminiTranslator, TranscriptItem } from './hooks/useGeminiTranslator';
+import { useWebRTC } from './hooks/useWebRTC';
 import { Visualizer } from './components/Visualizer';
 import { useMediaDevices } from './hooks/useMediaDevices';
 import { SettingsModal } from './components/SettingsModal';
 
-// --- ICONS ---
-const PhoneXMarkIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 3.75 18 6m0 0 2.25 2.25M18 6l2.25-2.25M18 6l-2.25 2.25m-10.5-2.393c5.142-6.685 15.245-1.977 15.245 6.643 0 2.657-1.42 5.06-3.616 6.368-2.673 1.593-5.22-.44-6.49-1.996-1.27-1.555-3.818-3.564-6.49-1.996-2.195 1.309-3.616 3.712-3.616 6.368 0 8.62 10.103 13.328 15.245 6.642" />
-  </svg>
-);
-
-const ExternalLinkIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-  </svg>
-);
-
-const ChatBubbleLeftRightIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-    </svg>
-);
-
-const MicIcon = ({ muted }: { muted: boolean }) => (
-    muted ? (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-2.393c5.142-6.685 15.245-1.977 15.245 6.643 0 2.657-1.42 5.06-3.616 6.368-2.673 1.593-5.22-.44-6.49-1.996-1.27-1.555-3.818-3.564-6.49-1.996-2.195 1.309-3.616 3.712-3.616 6.368 0 8.62 10.103 13.328 15.245 6.642" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+// --- ICONS (Clean, Modern, Flat, Lucide Style) ---
+const Icons = {
+    PhoneX: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
+    ),
+    MessageSquare: ({ on }: { on: boolean }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    ),
+    Mic: ({ off }: { off?: boolean }) => (
+        off ? 
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M12 19v4"/><path d="M8 23h8"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg> :
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    ),
+    Camera: ({ off }: { off?: boolean }) => (
+        off ?
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21l-3.5-3.5m-2-2l-2-2m-2-2l-3.5-3.5"/><path d="M15 7h1a2 2 0 0 1 2 2v6.5"/><path d="M23 7l-5 5 5 5V7"/><path d="M3 7h2l2-2h8l2 2h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2"/></svg> :
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+    ),
+    Settings: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    ),
+    ChevronDown: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    ),
+    Customer: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FFCC00" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+            <circle cx="12" cy="10" r="3" fill="#FFCC00" fillOpacity="0.1"></circle>
+            <path d="M7 15h10"></path>
         </svg>
-    ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+    ),
+    Agent: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 7h-9"></path>
+            <path d="M14 17H5"></path>
+            <circle cx="17" cy="17" r="3"></circle>
+            <circle cx="7" cy="7" r="3"></circle>
         </svg>
+    ),
+    Logo: () => (
+         <div className="flex items-center gap-2">
+            <div className="bg-[#FFCC00] text-black font-extrabold px-2 py-0.5 rounded-sm text-lg">DIE POST</div>
+            <div className="w-px h-6 bg-gray-400 mx-1"></div>
+            <span className="font-medium text-black text-lg tracking-tight">PostBranch</span>
+         </div>
     )
+};
+
+const Header = () => (
+    <div className="h-16 bg-white border-b-4 border-[#FFCC00] flex items-center px-6 justify-between shadow-sm z-50 relative">
+        <Icons.Logo />
+        <div className="text-sm text-gray-500 font-medium">Video-Schalter v2.5</div>
+    </div>
 );
 
-const VideoIcon = ({ muted }: { muted: boolean }) => (
-    muted ? (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M12 18.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9m12.841 9.091L16.5 19.5m-1.409-1.409c.407-.407.659-.97.659-1.591v-9a2.25 2.25 0 0 0-2.25-2.25h-9c-.621 0-1.184.252-1.591.659m12.182 12.182L2.909 5.909M1.5 4.5l1.409 1.409" />
-        </svg>
-    ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-        </svg>
-    )
+const Footer = () => (
+    <div className="py-6 text-center text-gray-400 text-xs">
+        &copy; 2025 Swiss Post Ltd. Powered by Google Gemini Live.
+    </div>
 );
-
-const EllipsisVerticalIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" />
-    </svg>
-);
-
-const ChevronDownIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
-        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-    </svg>
-);
-
-const ExclamationTriangleIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-    </svg>
-);
-
-// --- MAIN ROUTER ---
 
 export default function App() {
-  const [role, setRole] = useState<string | null>(null);
+  const [appState, setAppState] = useState<AppState>(AppState.LANDING);
+  const [userRole, setUserRole] = useState<UserRole>(UserRole.CUSTOMER);
+  const [userLanguage, setUserLanguage] = useState<Language>(DEFAULT_CUSTOMER_LANGUAGE);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(true);
+  
+  // Media Devices Hook
+  const { devices, config, setConfig, activeStream, refreshDevices } = useMediaDevices();
+  
+  // Translator Hook
+  const { 
+    connect, 
+    disconnect, 
+    isConnected, 
+    isConnecting, 
+    targetLanguage, 
+    error: geminiError, 
+    transcripts,
+    setMuted
+  } = useGeminiTranslator({
+    userLanguage,
+    userRole,
+    audioInputDeviceId: config.audioInputId,
+    audioOutputDeviceId: config.audioOutputId
+  });
 
+  // WebRTC Video Hook
+  const { remoteStream } = useWebRTC({
+      userRole,
+      localStream: activeStream,
+      isConnectedToRoom: !!targetLanguage
+  });
+
+  const [micOn, setMicOn] = useState(true);
+  const [cameraOn, setCameraOn] = useState(true);
+
+  // Refs for Video Elements
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Auto-connect flow from URL query params
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const roleParam = params.get('role');
-    setRole(roleParam);
+      const params = new URLSearchParams(window.location.search);
+      const role = params.get('role');
+      if (role === 'customer') {
+          setUserRole(UserRole.CUSTOMER);
+          setUserLanguage(DEFAULT_CUSTOMER_LANGUAGE);
+          setAppState(AppState.LANGUAGE_SELECTION);
+      } else if (role === 'agent') {
+          setUserRole(UserRole.AGENT);
+          setUserLanguage(DEFAULT_AGENT_LANGUAGE);
+          setAppState(AppState.LANGUAGE_SELECTION);
+      }
   }, []);
 
-  if (role === 'customer') {
-    return <UnifiedApp role={UserRole.CUSTOMER} />;
-  }
+  // API Key Check
+  const [apiKeyMissing, setApiKeyMissing] = useState(false);
+  useEffect(() => {
+     // @ts-ignore
+     const viteKey = import.meta.env?.VITE_API_KEY;
+     const processKey = process.env?.API_KEY;
+     if (!viteKey && !processKey) {
+         setApiKeyMissing(true);
+     }
+  }, []);
 
-  if (role === 'agent') {
-    return <UnifiedApp role={UserRole.AGENT} />;
-  }
+  // Update Video Element Sources
+  useEffect(() => {
+      if (localVideoRef.current && activeStream) {
+          localVideoRef.current.srcObject = activeStream;
+      }
+  }, [activeStream]);
 
-  return <Launcher />;
-}
+  useEffect(() => {
+      if (remoteVideoRef.current && remoteStream) {
+          remoteVideoRef.current.srcObject = remoteStream;
+      }
+  }, [remoteStream]);
 
-// --- LAUNCHER (LANDING) ---
+  // Handle Mute/Camera Toggles
+  useEffect(() => {
+      if (activeStream) {
+          activeStream.getAudioTracks().forEach(t => t.enabled = micOn);
+          activeStream.getVideoTracks().forEach(t => t.enabled = cameraOn);
+      }
+      setMuted(!micOn);
+  }, [micOn, cameraOn, activeStream, setMuted]);
 
-function Launcher() {
-  const openApp = (role: 'customer' | 'agent') => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('role', role);
-    window.open(url.toString(), '_blank', 'width=1280,height=850');
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-200 flex items-center justify-center p-6 font-sans">
-      <div className="max-w-5xl w-full">
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center p-5 bg-white rounded-3xl shadow-xl shadow-yellow-400/10 mb-8 transform hover:scale-105 transition-transform duration-500">
-             <span className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-yellow-600 tracking-tight">
-               PostBranch
-             </span>
-             <span className="text-5xl font-light text-gray-400 ml-2">Connect</span>
-          </div>
-          <h1 className="text-2xl font-medium text-gray-500">Video Translation Room</h1>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Customer Card */}
-          <div className="bg-white rounded-[2rem] shadow-xl hover:shadow-2xl hover:shadow-yellow-400/20 transition-all duration-300 overflow-hidden group border border-gray-100">
-            <div className="p-10 flex flex-col h-full">
-              <div className="w-16 h-16 bg-yellow-100 rounded-2xl flex items-center justify-center text-3xl mb-6 group-hover:rotate-6 transition-transform">
-                📮
-              </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Customer Kiosk</h2>
-              <p className="text-gray-500 mb-8 leading-relaxed">
-                Join the room as a Customer. Select your language and connect instantly.
-              </p>
-              <div className="mt-auto">
-                <Button onClick={() => openApp('customer')} fullWidth size="lg" icon={<ExternalLinkIcon />}>
-                  Launch Kiosk
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Agent Card */}
-          <div className="bg-white rounded-[2rem] shadow-xl hover:shadow-2xl hover:shadow-blue-600/20 transition-all duration-300 overflow-hidden group border border-gray-100">
-            <div className="p-10 flex flex-col h-full">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-3xl mb-6 group-hover:-rotate-6 transition-transform">
-                🎧
-              </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Agent Portal</h2>
-              <p className="text-gray-500 mb-8 leading-relaxed">
-                Join the room as an Agent. Select your language and connect instantly.
-              </p>
-              <div className="mt-auto">
-                <Button onClick={() => openApp('agent')} variant="secondary" fullWidth size="lg" icon={<ExternalLinkIcon />}>
-                  Launch Portal
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="mt-8 text-center text-sm text-gray-400">
-            Note: For this demo to work, please open both roles in separate tabs/windows within the <strong>same browser</strong>.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- UNIFIED APP ---
-
-function UnifiedApp({ role }: { role: UserRole }) {
-  const [appState, setAppState] = useState<AppState>(AppState.LANGUAGE_SELECTION);
-  const [myLanguage, setMyLanguage] = useState<Language>(
-    role === UserRole.CUSTOMER ? DEFAULT_CUSTOMER_LANGUAGE : DEFAULT_AGENT_LANGUAGE
-  );
-  
-  // Media Devices
-  const { devices, config, setConfig, activeStream } = useMediaDevices();
-
-  const handleLanguageSelect = (lang: Language) => {
-    setMyLanguage(lang);
-    setAppState(AppState.ROOM);
-  };
-
-  const handleLeaveRoom = () => {
+  const handleStart = (role: UserRole) => {
+    setUserRole(role);
+    setUserLanguage(role === UserRole.CUSTOMER ? DEFAULT_CUSTOMER_LANGUAGE : DEFAULT_AGENT_LANGUAGE);
     setAppState(AppState.LANGUAGE_SELECTION);
   };
 
-  const isCustomer = role === UserRole.CUSTOMER;
+  const handleLanguageSelect = (lang: Language) => {
+    setUserLanguage(lang);
+    setAppState(AppState.ROOM);
+    connect();
+  };
 
-  if (appState === AppState.LANGUAGE_SELECTION) {
-      return (
-        <div className="min-h-screen bg-slate-50 font-sans text-gray-900 overflow-hidden flex flex-col">
-            <div className="bg-white/90 backdrop-blur-md border-b border-gray-200 px-6 py-4 flex items-center gap-3 shadow-sm">
-                <div className={`text-white w-10 h-10 rounded-xl shadow-lg flex items-center justify-center font-bold text-lg ${isCustomer ? 'bg-yellow-400 shadow-yellow-400/30' : 'bg-blue-600 shadow-blue-600/30'}`}>
-                    {isCustomer ? 'C' : 'A'}
+  const handleEndCall = () => {
+    disconnect();
+    setAppState(AppState.LANDING);
+    window.location.search = ''; // Clear query params
+  };
+
+  // --- VIEWS ---
+
+  if (appState === AppState.LANDING) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center p-6">
+            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Customer Card */}
+                <div className="bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-t-8 border-[#FFCC00] flex flex-col items-center text-center group">
+                    <div className="mb-6 p-6 bg-yellow-50 rounded-full group-hover:scale-110 transition-transform">
+                        <Icons.Customer />
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2 text-gray-900">Kiosk Mode</h2>
+                    <p className="text-gray-500 mb-8">Start the Video Counter for customers at the branch.</p>
+                    <Button 
+                        onClick={() => handleStart(UserRole.CUSTOMER)} 
+                        variant="post-yellow" 
+                        size="lg" 
+                        fullWidth
+                        className="rounded-lg shadow-md font-bold"
+                    >
+                        Launch Kiosk
+                    </Button>
                 </div>
-                <div>
-                     <span className="font-bold text-xl tracking-tight text-gray-800 block leading-none">PostBranch</span>
-                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{isCustomer ? 'Customer Kiosk' : 'Agent Portal'}</span>
+
+                {/* Agent Card */}
+                <div className="bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-t-8 border-blue-600 flex flex-col items-center text-center group">
+                    <div className="mb-6 p-6 bg-blue-50 rounded-full group-hover:scale-110 transition-transform">
+                        <Icons.Agent />
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2 text-gray-900">Agent Portal</h2>
+                    <p className="text-gray-500 mb-8">Log in as a remote agent to accept video calls.</p>
+                    <Button 
+                        onClick={() => handleStart(UserRole.AGENT)} 
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md font-bold" 
+                        size="lg" 
+                        fullWidth
+                    >
+                        Launch Portal
+                    </Button>
                 </div>
             </div>
-            <div className="flex-1 flex items-center justify-center p-6">
-                <div className="max-w-3xl w-full animate-fade-in-up">
-                  <div className="text-center mb-10">
-                    <h2 className="text-4xl font-bold text-gray-900 mb-4">Select Your Language</h2>
-                    <p className="text-xl text-gray-500">Choose the language you will be speaking.</p>
-                  </div>
-                  <div className="bg-white rounded-[2rem] shadow-2xl shadow-gray-200/50 p-8 md:p-12 border border-gray-100">
-                    <LanguageSelector onSelect={handleLanguageSelect} selectedLang={myLanguage} />
-                  </div>
-                  <div className="mt-8 text-center text-gray-400 text-sm">
-                    Make sure the other participant is also ready in another tab.
-                  </div>
-                </div>
-            </div>
-        </div>
-      );
+        </main>
+        <Footer />
+      </div>
+    );
   }
 
-  return (
-      <SessionView 
-        userRole={role}
-        myLanguage={myLanguage}
-        setMyLanguage={setMyLanguage}
-        onLeave={handleLeaveRoom}
-        activeStream={activeStream}
-        deviceConfig={config}
-        setDeviceConfig={setConfig}
-        devices={devices}
-      />
-  );
-}
-
-// --- SESSION VIEW (GOOGLE MEET STYLE) ---
-
-function SessionView({ 
-    userRole,
-    myLanguage, 
-    setMyLanguage,
-    onLeave,
-    activeStream,
-    deviceConfig,
-    setDeviceConfig,
-    devices
-}: { 
-    userRole: UserRole,
-    myLanguage: Language, 
-    setMyLanguage: (l: Language) => void,
-    onLeave: () => void,
-    activeStream: MediaStream | null,
-    deviceConfig: any,
-    setDeviceConfig: any,
-    devices: any[]
-}) {
-    const { 
-        disconnect, 
-        isConnected, 
-        isConnecting,
-        error,
-        targetLanguage,
-        transcripts,
-        setMuted 
-    } = useGeminiTranslator({ 
-        userLanguage: myLanguage, 
-        userRole, 
-        audioInputDeviceId: deviceConfig.audioInputId,
-        audioOutputDeviceId: deviceConfig.audioOutputId
-    });
-    
-    const [isSubtitlesOpen, setIsSubtitlesOpen] = useState(false);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
-    
-    // Toggles for UI
-    const [micOn, setMicOn] = useState(true);
-    const [camOn, setCamOn] = useState(true);
-    
-    const localVideoRef = useRef<HTMLVideoElement>(null);
-    const transcriptRef = useRef<HTMLDivElement>(null);
-
-    // Sync Mute State with Gemini Service
-    useEffect(() => {
-        setMuted(!micOn);
-    }, [micOn, setMuted]);
-
-    // Attach local stream to video element
-    useEffect(() => {
-        if (localVideoRef.current && activeStream) {
-            localVideoRef.current.srcObject = activeStream;
-            // Visual mute for local video only (mute track locally if cam off)
-            const videoTracks = activeStream.getVideoTracks();
-            videoTracks.forEach(t => t.enabled = camOn);
-        }
-    }, [activeStream, camOn]);
-
-    // Auto scroll transcripts
-    useEffect(() => {
-        if (transcriptRef.current) {
-            transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
-        }
-    }, [transcripts, isSubtitlesOpen]);
-
-    const isAgent = userRole === UserRole.AGENT;
-    
-    // Helper to get API Key for warning
-    const getApiKey = () => {
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
-            // @ts-ignore
-            return import.meta.env.VITE_API_KEY;
-        }
-        return process.env.API_KEY;
-    }
-
-    // Using generic stock videos for a "live" feel
-    const remoteVideoSrc = isAgent 
-        ? 'https://cdn.coverr.co/videos/coverr-woman-working-on-her-laptop-at-home-4752/1080p.mp4' // Generic home user for Agent to see
-        : 'https://cdn.coverr.co/videos/coverr-customer-support-agent-talking-to-a-client-5619/1080p.mp4'; // Professional agent for Customer to see
-
+  if (appState === AppState.LANGUAGE_SELECTION) {
     return (
-        <div className="relative w-full h-screen bg-[#202124] overflow-hidden flex flex-col text-white font-sans">
-            
-            {/* Warning Banner */}
-            {(!getApiKey() || error) && (
-                <div className="absolute top-0 left-0 w-full z-[100] bg-red-600 text-white text-center py-2 text-sm font-medium flex items-center justify-center gap-2">
-                    <ExclamationTriangleIcon />
-                    {error || "API Key missing. Set VITE_API_KEY in Vercel."}
-                </div>
-            )}
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Header />
+        <main className="flex-1 flex flex-col items-center justify-center p-6">
+           <div className="w-full max-w-3xl space-y-8 animate-fade-in-up">
+              <div className="text-center space-y-2">
+                 <h2 className="text-3xl font-bold text-gray-900">
+                    {userRole === UserRole.CUSTOMER ? 'Wählen Sie Ihre Sprache' : 'Select your operating language'}
+                 </h2>
+                 <p className="text-gray-500">
+                    {userRole === UserRole.CUSTOMER ? 'Für die Video-Beratung' : 'For live translation'}
+                 </p>
+              </div>
 
-            {/* --- MAIN REMOTE VIDEO --- */}
-            <div className="flex-1 p-4 flex items-center justify-center relative min-h-0">
-                <div className="relative w-full h-full max-w-[1600px] rounded-3xl overflow-hidden bg-[#3c4043] shadow-2xl group">
-                    <video 
-                        src={remoteVideoSrc}
-                        autoPlay
-                        loop
-                        muted
-                        className={`w-full h-full object-cover transition-all duration-1000 ${targetLanguage ? 'opacity-100 scale-100' : 'opacity-40 scale-105 blur-sm'}`}
-                    />
-                    
-                    {/* Remote Info Badge */}
-                    {targetLanguage && (
-                        <div className="absolute top-6 left-6 flex items-center gap-3 bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl text-white border border-white/10">
-                            <span className="text-xl">{targetLanguage.flag}</span>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold leading-none">{isAgent ? 'Customer' : 'Agent'}</span>
-                                <span className="text-[10px] text-gray-300 uppercase tracking-wider">Speaking {targetLanguage.name}</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {!targetLanguage && (
-                         <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 text-center z-10 p-4">
-                            <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center animate-pulse">
-                                <div className="w-8 h-8 rounded-full bg-blue-400"></div>
-                            </div>
-                            <h2 className="text-2xl font-medium">Waiting for partner...</h2>
-                            <p className="text-gray-400 text-sm max-w-md">
-                                Keep this tab open. The connection will start automatically when the partner joins.
-                            </p>
-                         </div>
-                    )}
-                    
-                    {/* Visualizer showing that we are listening even if waiting */}
-                    {isConnecting && targetLanguage && (
-                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-4 py-2 rounded-full flex items-center gap-3">
-                             <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span>
-                             <span className="text-xs font-medium">Connected to Translator</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* --- LOCAL VIDEO (FLOATING TOP-LEFT) --- */}
-                <div className="absolute top-8 left-8 w-[280px] aspect-video rounded-xl overflow-hidden bg-[#202124] border border-[#5f6368] shadow-2xl z-20 group transition-all hover:scale-105 hover:border-white/20">
-                    {activeStream && camOn ? (
-                        <video 
-                            ref={localVideoRef} 
-                            autoPlay 
-                            muted 
-                            playsInline
-                            className="w-full h-full object-cover transform scale-x-[-1]"
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center flex-col gap-2 bg-[#3c4043]">
-                            <div className="p-3 bg-red-500 rounded-full text-white">
-                                <VideoIcon muted={true} />
-                            </div>
-                            <span className="text-xs font-medium text-gray-400">Camera Off</span>
-                        </div>
-                    )}
-                    
-                    {/* Me Badge */}
-                    <div className="absolute bottom-3 left-3 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded text-xs font-medium">
-                        You ({myLanguage.flag})
-                    </div>
-                    
-                    {/* Visualizer (Top Right of Local Video) */}
-                    <div className="absolute top-3 right-3">
-                        <Visualizer isActive={isConnected || isConnecting} />
-                    </div>
-                </div>
-                
-                {/* --- SIDE PANEL (TRANSCRIPT) --- */}
-                {isSubtitlesOpen && (
-                    <div className="absolute top-4 bottom-4 right-4 w-[360px] bg-white rounded-2xl shadow-2xl z-30 flex flex-col overflow-hidden animate-fade-in-left">
-                        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h3 className="font-bold text-gray-800 text-sm">Transcript</h3>
-                            <button onClick={() => setIsSubtitlesOpen(false)} className="text-gray-400 hover:text-gray-600">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div ref={transcriptRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-white text-gray-800">
-                            {transcripts.length === 0 && (
-                                <div className="flex h-full items-center justify-center text-gray-400 text-sm text-center px-6">
-                                    Conversation will appear here once connected...
-                                </div>
-                            )}
-                            {transcripts.map((t) => (
-                                <div key={t.id} className={`flex flex-col ${t.sender === 'Client' ? 'items-start' : 'items-end'}`}>
-                                    <span className="text-[10px] text-gray-400 font-bold mb-1 uppercase">{t.sender}</span>
-                                    <div className={`
-                                        px-3 py-2 rounded-lg text-sm max-w-[85%]
-                                        ${t.sender === 'Client' ? 'bg-yellow-100 text-gray-800' : 'bg-blue-100 text-gray-800'}
-                                    `}>
-                                        {t.text}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* --- BOTTOM CONTROL BAR --- */}
-            <div className="h-20 flex items-center justify-center gap-4 px-6 relative mb-2 shrink-0 z-50">
-                
-                {/* 1. Mic Toggle */}
-                <button 
-                    onClick={() => setMicOn(!micOn)}
-                    className={`
-                        w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 border border-transparent
-                        ${micOn 
-                            ? 'bg-[#3c4043] hover:bg-[#4a4e53] text-white' 
-                            : 'bg-red-500 hover:bg-red-600 text-white'
-                        }
-                    `}
-                    title={micOn ? "Mute Microphone" : "Unmute Microphone"}
-                >
-                    <MicIcon muted={!micOn} />
-                </button>
-
-                {/* 2. Camera Toggle */}
-                <button 
-                    onClick={() => setCamOn(!camOn)}
-                    className={`
-                        w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 border border-transparent
-                        ${camOn 
-                            ? 'bg-[#3c4043] hover:bg-[#4a4e53] text-white' 
-                            : 'bg-red-500 hover:bg-red-600 text-white'
-                        }
-                    `}
-                    title={camOn ? "Turn Camera Off" : "Turn Camera On"}
-                >
-                    <VideoIcon muted={!camOn} />
-                </button>
-
-                {/* 3. Language Selector (Dropdown) */}
-                <div className="relative">
-                    <button 
-                        onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-                        className="h-12 px-6 rounded-full bg-[#3c4043] hover:bg-[#4a4e53] text-white flex items-center gap-3 transition-colors border border-transparent hover:border-gray-500"
-                    >
-                        <span className="text-xl">{myLanguage.flag}</span>
-                        <span className="text-sm font-medium">{myLanguage.name}</span>
-                        <ChevronDownIcon />
-                    </button>
-                    
-                    {/* Dropdown Menu */}
-                    {isLangMenuOpen && (
-                         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-64 bg-[#303134] rounded-lg shadow-xl border border-[#5f6368] overflow-hidden max-h-[300px] overflow-y-auto z-50">
-                            {SUPPORTED_LANGUAGES.map((lang) => (
-                                <button 
-                                    key={lang.code}
-                                    onClick={() => { setMyLanguage(lang); setIsLangMenuOpen(false); }}
-                                    className="w-full text-left px-4 py-3 hover:bg-[#3c4043] flex items-center gap-3 text-sm text-gray-200 border-b border-[#3c4043] last:border-0"
-                                >
-                                    <span className="text-lg">{lang.flag}</span>
-                                    {lang.name}
-                                    {myLanguage.code === lang.code && (
-                                        <span className="ml-auto text-yellow-400">✓</span>
-                                    )}
-                                </button>
-                            ))}
-                         </div>
-                    )}
-                </div>
-
-                {/* 4. Chat/Subtitle Toggle */}
-                <button 
-                    onClick={() => setIsSubtitlesOpen(!isSubtitlesOpen)}
-                    className={`
-                        w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 border border-transparent
-                        ${isSubtitlesOpen
-                            ? 'bg-[#8ab4f8] text-gray-900' 
-                            : 'bg-[#3c4043] hover:bg-[#4a4e53] text-white'
-                        }
-                    `}
-                    title="Toggle Subtitles"
-                >
-                    <ChatBubbleLeftRightIcon />
-                </button>
-
-                {/* 5. More / Settings */}
-                <button 
-                     onClick={() => setIsSettingsOpen(true)}
-                     className="w-12 h-12 rounded-full flex items-center justify-center bg-[#3c4043] hover:bg-[#4a4e53] text-white transition-all border border-transparent"
-                     title="Settings"
-                >
-                    <EllipsisVerticalIcon />
-                </button>
-
-                {/* 6. End Call */}
-                <button 
-                    onClick={() => { disconnect(); onLeave(); }}
-                    className="h-12 px-8 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center gap-2 transition-all ml-4"
-                >
-                    <PhoneXMarkIcon />
-                    <span className="text-sm font-medium">End Call</span>
-                </button>
-            </div>
-
-            <SettingsModal 
-                isOpen={isSettingsOpen} 
-                onClose={() => setIsSettingsOpen(false)} 
-                devices={devices}
-                config={deviceConfig}
-                setConfig={setDeviceConfig}
-            />
-        </div>
+              <LanguageSelector 
+                selectedLang={userLanguage} 
+                onSelect={handleLanguageSelect} 
+              />
+              
+              <div className="flex justify-center pt-8">
+                 <Button variant="ghost" onClick={() => setAppState(AppState.LANDING)}>
+                    Cancel
+                 </Button>
+              </div>
+           </div>
+        </main>
+      </div>
     );
+  }
+
+  // --- ROOM VIEW ---
+  return (
+    <div className="h-screen bg-gray-900 overflow-hidden flex flex-col relative">
+      {/* Warning Banners */}
+      {apiKeyMissing && (
+        <div className="absolute top-0 left-0 right-0 bg-red-600 text-white p-2 text-center text-sm font-bold z-[60]">
+           MISSING API KEY: Please set VITE_API_KEY in Vercel Environment Variables.
+        </div>
+      )}
+      {geminiError && (
+        <div className="absolute top-0 left-0 right-0 bg-red-500 text-white p-2 text-center text-sm font-medium z-[60]">
+           Translator Error: {geminiError}
+        </div>
+      )}
+
+      {/* Main Video Area */}
+      <div className="flex-1 relative flex min-h-0">
+          {/* Main Content (Remote Video) */}
+          <div className="flex-1 relative bg-black flex items-center justify-center">
+             
+             {/* Remote Video Element */}
+             <video 
+                ref={remoteVideoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+             />
+
+             {/* Waiting State (If no remote stream) */}
+             {!remoteStream && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white/50 space-y-4">
+                    <div className="w-20 h-20 rounded-full border-4 border-white/20 border-t-[#FFCC00] animate-spin"></div>
+                    <div className="text-lg font-medium">
+                        {isConnecting ? 'Connecting to Translator...' : 'Waiting for partner...'}
+                    </div>
+                    {!isConnecting && isConnected && (
+                        <div className="text-sm bg-white/10 px-4 py-2 rounded-full backdrop-blur-md">
+                           Waiting for {userRole === 'CUSTOMER' ? 'Agent' : 'Customer'}
+                        </div>
+                    )}
+                </div>
+             )}
+
+             {/* Connection Badge */}
+             {targetLanguage && (
+                 <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md border border-white/10 text-white px-4 py-1.5 rounded-full flex items-center gap-2 text-sm font-medium shadow-lg z-10">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span>{targetLanguage.name} Connected</span>
+                 </div>
+             )}
+          </div>
+
+          {/* Transcript Sidebar */}
+          {showTranscript && (
+             <div className="w-80 bg-white border-l border-gray-200 flex flex-col shadow-2xl z-20 transition-all duration-300">
+                <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+                    <h3 className="font-bold text-gray-700">Live Transcript</h3>
+                    <button onClick={() => setShowTranscript(false)} className="text-gray-400 hover:text-gray-600">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+                    {transcripts.length === 0 && (
+                        <div className="text-center text-gray-400 text-sm mt-10 italic">
+                            Conversation will appear here...
+                        </div>
+                    )}
+                    {transcripts.map((t) => (
+                        <div key={t.id} className={`flex flex-col ${t.sender === 'Client' ? 'items-start' : 'items-end'}`}>
+                            <div className="flex items-center gap-1 mb-1">
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${t.sender === 'Client' ? 'text-[#FFCC00]' : 'text-blue-600'}`}>
+                                    {t.sender}
+                                </span>
+                            </div>
+                            <div className={`
+                                max-w-[90%] px-3 py-2 rounded-2xl text-sm
+                                ${t.sender === 'Client' 
+                                    ? 'bg-yellow-100 text-gray-800 rounded-tl-none' 
+                                    : 'bg-blue-600 text-white rounded-tr-none'}
+                                ${t.isTranslation ? 'font-medium' : 'opacity-80 text-xs'}
+                            `}>
+                                {t.text}
+                            </div>
+                        </div>
+                    ))}
+                    <div className="h-4" /> {/* Spacer */}
+                </div>
+             </div>
+          )}
+
+          {/* Local Video Tile (Draggable-ish / Fixed Position) */}
+          <div className="absolute top-6 left-6 w-48 aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 z-30 group">
+             <video 
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={`w-full h-full object-cover ${!cameraOn ? 'hidden' : ''}`} 
+             />
+             {!cameraOn && (
+                 <div className="absolute inset-0 flex items-center justify-center bg-gray-800 text-white">
+                     <Icons.Camera off />
+                 </div>
+             )}
+             <div className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-black/50 px-2 py-0.5 rounded backdrop-blur-sm">
+                YOU ({userLanguage.flag})
+             </div>
+             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                 <Visualizer isActive={transcripts.length > 0} />
+             </div>
+          </div>
+      </div>
+
+      {/* Control Bar */}
+      <div className="h-20 bg-gray-900/90 backdrop-blur-md border-t border-white/10 flex items-center justify-between px-8 z-40">
+          {/* Left: Branding / Time */}
+          <div className="text-white font-medium flex items-center gap-4">
+              <div className="text-lg font-bold">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+              <div className="h-4 w-px bg-white/20"></div>
+              <div className="text-sm text-gray-400">PostBranch Connect</div>
+          </div>
+
+          {/* Center: Controls */}
+          <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setMicOn(!micOn)}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${micOn ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}
+              >
+                  <Icons.Mic off={!micOn} />
+              </button>
+
+              <button 
+                onClick={() => setCameraOn(!cameraOn)}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${cameraOn ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}
+              >
+                  <Icons.Camera off={!cameraOn} />
+              </button>
+
+              <div className="w-px h-8 bg-white/10 mx-2"></div>
+
+              {/* Language Dropdown */}
+              <div className="relative group">
+                 <button className="h-12 px-4 bg-gray-800 hover:bg-gray-700 rounded-full text-white flex items-center gap-2 border border-white/10 transition-all">
+                    <span>{userLanguage.flag}</span>
+                    <span className="font-medium text-sm hidden sm:inline">{userLanguage.name}</span>
+                    <Icons.ChevronDown />
+                 </button>
+                 {/* Dropdown Content could go here, omitting for brevity as main selection happens at start */}
+              </div>
+
+              <div className="w-px h-8 bg-white/10 mx-2"></div>
+
+              <button 
+                onClick={handleEndCall}
+                className="h-12 px-6 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold flex items-center gap-2 transition-all shadow-lg hover:shadow-red-900/20"
+              >
+                  <Icons.PhoneX />
+                  <span>End Call</span>
+              </button>
+          </div>
+
+          {/* Right: Tools */}
+          <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setShowTranscript(!showTranscript)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${showTranscript ? 'bg-[#FFCC00] text-black' : 'text-white hover:bg-white/10'}`}
+              >
+                  <Icons.MessageSquare on={showTranscript} />
+              </button>
+              <button 
+                 onClick={() => setShowSettings(true)}
+                 className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-all"
+              >
+                  <Icons.Settings />
+              </button>
+          </div>
+      </div>
+      
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={showSettings} 
+        onClose={() => setShowSettings(false)}
+        devices={devices}
+        config={config}
+        setConfig={setConfig}
+      />
+    </div>
+  );
 }
