@@ -176,16 +176,23 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   }, []);
 
   const connect = useCallback(() => {
-      // Connect is handled automatically by the effect above when targetLanguage is set
+      // Handled automatically
+  }, []);
+
+  const setMuted = useCallback((muted: boolean) => {
+      if (serviceRef.current) {
+          serviceRef.current.setMuted(muted);
+      }
   }, []);
 
   return {
-    connect, // Actually handled automatically by effect now, but kept for interface compatibility
+    connect,
     disconnect,
     isConnected,
     isConnecting,
     targetLanguage,
     error,
-    transcripts
+    transcripts,
+    setMuted
   };
 };

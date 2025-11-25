@@ -21,9 +21,14 @@ export class GeminiLiveService {
   private stream: MediaStream | null = null;
   private processor: ScriptProcessorNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
+  private isMuted: boolean = false;
   
   constructor() {
     this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  }
+
+  public setMuted(muted: boolean) {
+    this.isMuted = muted;
   }
 
   public async connect(options: ConnectOptions) {
@@ -107,6 +112,8 @@ export class GeminiLiveService {
       this.processor = this.inputAudioContext.createScriptProcessor(4096, 1, 1);
 
       this.processor.onaudioprocess = (e) => {
+        if (this.isMuted) return; // Skip processing if muted
+
         const inputData = e.inputBuffer.getChannelData(0);
         const pcmBlob = createPcmBlob(inputData);
         
