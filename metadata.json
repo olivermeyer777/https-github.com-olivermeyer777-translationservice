@@ -1,0 +1,7 @@
+{
+  "name": "PostBranch Connect",
+  "description": "A real-time video consultation kiosk for postal branches featuring live bidirectional translation powered by Gemini 2.5 Live API.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
