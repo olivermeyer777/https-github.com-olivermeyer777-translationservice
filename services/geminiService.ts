@@ -22,9 +22,14 @@ export class GeminiLiveService {
   private processor: ScriptProcessorNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   private isMuted: boolean = false;
+  private isConnected: boolean = false;
   
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const key = process.env.API_KEY || '';
+    if (!key) {
+      console.error("API_KEY is missing in process.env");
+    }
+    this.ai = new GoogleGenAI({ apiKey: key });
   }
 
   public setMuted(muted: boolean) {
@@ -32,6 +37,11 @@ export class GeminiLiveService {
   }
 
   public async connect(options: ConnectOptions) {
+    if (!process.env.API_KEY) {
+        options.onError(new Error("API Key is missing"));
+        return;
+    }
+
     this.outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     
     // Strict Translator Role
@@ -51,6 +61,7 @@ export class GeminiLiveService {
     `;
 
     try {
+      this.isConnected = true;
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
@@ -84,10 +95,14 @@ export class GeminiLiveService {
             },
             onclose: () => {
                 console.log("Gemini Live Closed");
+                this.isConnected = false;
+                this.stopMicrophone(); // Stop mic immediately to prevent errors
                 options.onClose();
             },
             onerror: (e) => {
                 console.error("Gemini Live Error", e);
+                this.isConnected = false;
+                this.stopMicrophone();
                 options.onError(new Error("Connection error"));
             }
         }
@@ -95,6 +110,7 @@ export class GeminiLiveService {
       
       await this.sessionPromise;
     } catch (err) {
+      this.isConnected = false;
       console.error("Connection failed", err);
       options.onError(err instanceof Error ? err : new Error("Failed to connect"));
     }
@@ -112,14 +128,24 @@ export class GeminiLiveService {
       this.processor = this.inputAudioContext.createScriptProcessor(4096, 1, 1);
 
       this.processor.onaudioprocess = (e) => {
-        if (this.isMuted) return; // Skip processing if muted
+        if (this.isMuted || !this.isConnected) return; 
 
         const inputData = e.inputBuffer.getChannelData(0);
         const pcmBlob = createPcmBlob(inputData);
         
         if (this.sessionPromise) {
             this.sessionPromise.then(session => {
-                session.sendRealtimeInput({ media: pcmBlob });
+                // Double check connection state inside the promise resolution
+                if (this.isConnected) {
+                    try {
+                        session.sendRealtimeInput({ media: pcmBlob });
+                    } catch (e) {
+                        console.warn("Error sending audio frame, stopping...", e);
+                        this.disconnect();
+                    }
+                }
+            }).catch(e => {
+                // Session likely closed
             });
         }
       };
@@ -132,9 +158,10 @@ export class GeminiLiveService {
     }
   }
 
-  public disconnect() {
+  private stopMicrophone() {
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
+      this.stream = null;
     }
     if (this.processor) {
       this.processor.disconnect();
@@ -146,9 +173,18 @@ export class GeminiLiveService {
     }
     if (this.inputAudioContext) {
       this.inputAudioContext.close();
+      this.inputAudioContext = null;
     }
+  }
+
+  public disconnect() {
+    this.isConnected = false;
+    this.stopMicrophone();
+    
     if (this.outputAudioContext) {
         this.outputAudioContext.close();
+        this.outputAudioContext = null;
     }
+    this.sessionPromise = null;
   }
 }

@@ -30,6 +30,10 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   const nextStartTimeRef = useRef<number>(0);
   const serviceRef = useRef<GeminiLiveService | null>(null);
   const heartbeatRef = useRef<number | null>(null);
+  
+  // Retry logic
+  const retryTimeoutRef = useRef<number | null>(null);
+  const retryCountRef = useRef(0);
 
   // Play audio buffer (used for incoming remote audio)
   const playAudio = useCallback(async (base64Data: string) => {
@@ -46,7 +50,7 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
         if (audioOutputDeviceId && (ctx as any).setSinkId) {
              try {
                 await (ctx as any).setSinkId(audioOutputDeviceId);
-             } catch(e) { console.warn("Cannot set sinkId on AudioContext", e); }
+             } catch(e) { /* ignore */ }
         }
 
         const audioBytes = base64ToUint8Array(base64Data);
@@ -113,10 +117,9 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
             if (!targetLanguage) {
                  signaling.send({ type: 'PING', role: userRole });
             } else {
-                // If we have a target, we can stop pinging, but sending generic presence is fine
-                // For now, let's stop strict pinging to reduce noise, 
-                // but we might want to keep it for disconnect detection later.
-                if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+                // If we have a target, we can slow down or stop pinging
+                // We keep pinging occasionally to handle reconnects if the other tab refreshes
+                // but checking the loop ensures we don't start unnecessary new loops
             }
         }, 2000);
     };
@@ -132,6 +135,12 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   // Connect to Gemini ONLY when we have a target language
   useEffect(() => {
     if (!targetLanguage || isConnected || isConnecting) return;
+    
+    // Prevent connecting if we hit max retries recently (basic circuit breaker)
+    if (retryCountRef.current > 5) {
+        setError("Unable to connect to translation service. Please check your network or API Key.");
+        return;
+    }
 
     const start = async () => {
         setIsConnecting(true);
@@ -173,22 +182,41 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
                 onClose: () => {
                     setIsConnected(false);
                     setIsConnecting(false);
+                    serviceRef.current = null;
                 },
                 onError: (err) => {
+                    console.warn("Service error, attempting retry logic...", err);
                     setError(err.message);
                     setIsConnected(false);
                     setIsConnecting(false);
+                    serviceRef.current = null;
+                    
+                    // Retry with backoff
+                    retryCountRef.current += 1;
+                    const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
+                    retryTimeoutRef.current = window.setTimeout(() => {
+                        // Trigger effect re-run by toggling a dummy state or just relying on deps
+                        // In this case, since isConnected is false, the effect will naturally run again 
+                        // IF we don't block it. We just need to clear the timeout.
+                        retryTimeoutRef.current = null;
+                    }, delay);
                 }
             });
+            // If we got here without throwing, we assume connected initially
             setIsConnected(true);
+            retryCountRef.current = 0; // Reset retries on success
         } catch(e) {
             setError("Failed to connect to Translator");
-        } finally {
             setIsConnecting(false);
+            serviceRef.current = null;
         }
     };
 
     start();
+
+    return () => {
+        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    };
   }, [targetLanguage, userLanguage, userRole, isConnected, isConnecting, audioInputDeviceId]);
 
   const disconnect = useCallback(() => {
@@ -205,7 +233,9 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   }, []);
 
   const connect = useCallback(() => {
-      // Handled automatically via effects
+      // Handled automatically via effects, but can be exposed for manual retry
+      retryCountRef.current = 0;
+      setIsConnected(false); // Trigger effect
   }, []);
 
   const setMuted = useCallback((muted: boolean) => {

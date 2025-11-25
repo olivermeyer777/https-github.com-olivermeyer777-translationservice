@@ -65,6 +65,12 @@ const ChevronDownIcon = () => (
     </svg>
 );
 
+const ExclamationTriangleIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+    </svg>
+);
+
 // --- MAIN ROUTER ---
 
 export default function App() {
@@ -238,6 +244,8 @@ function SessionView({
     const { 
         disconnect, 
         isConnected, 
+        isConnecting,
+        error,
         targetLanguage,
         transcripts,
         setMuted 
@@ -291,9 +299,17 @@ function SessionView({
     return (
         <div className="relative w-full h-screen bg-[#202124] overflow-hidden flex flex-col text-white font-sans">
             
+            {/* Warning Banner */}
+            {(!process.env.API_KEY || error) && (
+                <div className="absolute top-0 left-0 w-full z-[100] bg-red-600 text-white text-center py-2 text-sm font-medium flex items-center justify-center gap-2">
+                    <ExclamationTriangleIcon />
+                    {error || "API Key missing. Translation will not work."}
+                </div>
+            )}
+
             {/* --- MAIN REMOTE VIDEO --- */}
             <div className="flex-1 p-4 flex items-center justify-center relative min-h-0">
-                <div className="relative w-full h-full max-w-[1600px] rounded-3xl overflow-hidden bg-[#3c4043] shadow-2xl">
+                <div className="relative w-full h-full max-w-[1600px] rounded-3xl overflow-hidden bg-[#3c4043] shadow-2xl group">
                     <video 
                         src={remoteVideoSrc}
                         autoPlay
@@ -314,18 +330,26 @@ function SessionView({
                     )}
 
                     {!targetLanguage && (
-                         <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 text-center z-10">
+                         <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 text-center z-10 p-4">
                             <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center animate-pulse">
                                 <div className="w-8 h-8 rounded-full bg-blue-400"></div>
                             </div>
                             <h2 className="text-2xl font-medium">Waiting for partner...</h2>
-                            <p className="text-gray-400 text-sm max-w-md">Open the other role in a separate tab to connect.</p>
+                            <p className="text-gray-400 text-sm max-w-md">Open the other role in a separate tab/window to connect.</p>
                          </div>
+                    )}
+                    
+                    {/* Visualizer showing that we are listening even if waiting */}
+                    {isConnecting && targetLanguage && (
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-4 py-2 rounded-full flex items-center gap-3">
+                             <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span>
+                             <span className="text-xs font-medium">Connecting to Translator...</span>
+                        </div>
                     )}
                 </div>
 
                 {/* --- LOCAL VIDEO (FLOATING TOP-LEFT) --- */}
-                <div className="absolute top-8 left-8 w-[280px] aspect-video rounded-xl overflow-hidden bg-[#202124] border border-[#5f6368] shadow-2xl z-20 group">
+                <div className="absolute top-8 left-8 w-[280px] aspect-video rounded-xl overflow-hidden bg-[#202124] border border-[#5f6368] shadow-2xl z-20 group transition-all hover:scale-105 hover:border-white/20">
                     {activeStream && camOn ? (
                         <video 
                             ref={localVideoRef} 
@@ -350,7 +374,7 @@ function SessionView({
                     
                     {/* Visualizer (Top Right of Local Video) */}
                     <div className="absolute top-3 right-3">
-                        <Visualizer isActive={isConnected} />
+                        <Visualizer isActive={isConnected || isConnecting} />
                     </div>
                 </div>
                 
@@ -366,6 +390,11 @@ function SessionView({
                             </button>
                         </div>
                         <div ref={transcriptRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-white text-gray-800">
+                            {transcripts.length === 0 && (
+                                <div className="flex h-full items-center justify-center text-gray-400 text-sm text-center px-6">
+                                    Conversation will appear here once connected...
+                                </div>
+                            )}
                             {transcripts.map((t) => (
                                 <div key={t.id} className={`flex flex-col ${t.sender === 'Client' ? 'items-start' : 'items-end'}`}>
                                     <span className="text-[10px] text-gray-400 font-bold mb-1 uppercase">{t.sender}</span>
