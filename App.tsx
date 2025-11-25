@@ -152,6 +152,10 @@ function Launcher() {
             </div>
           </div>
         </div>
+        
+        <div className="mt-8 text-center text-sm text-gray-400">
+            Note: For this demo to work, please open both roles in separate tabs/windows within the <strong>same browser</strong>.
+        </div>
       </div>
     </div>
   );
@@ -199,6 +203,9 @@ function UnifiedApp({ role }: { role: UserRole }) {
                   </div>
                   <div className="bg-white rounded-[2rem] shadow-2xl shadow-gray-200/50 p-8 md:p-12 border border-gray-100">
                     <LanguageSelector onSelect={handleLanguageSelect} selectedLang={myLanguage} />
+                  </div>
+                  <div className="mt-8 text-center text-gray-400 text-sm">
+                    Make sure the other participant is also ready in another tab.
                   </div>
                 </div>
             </div>
@@ -345,7 +352,9 @@ function SessionView({
                                 <div className="w-8 h-8 rounded-full bg-blue-400"></div>
                             </div>
                             <h2 className="text-2xl font-medium">Waiting for partner...</h2>
-                            <p className="text-gray-400 text-sm max-w-md">Open the other role in a separate tab/window to connect.</p>
+                            <p className="text-gray-400 text-sm max-w-md">
+                                Keep this tab open. The connection will start automatically when the partner joins.
+                            </p>
                          </div>
                     )}
                     
@@ -353,7 +362,7 @@ function SessionView({
                     {isConnecting && targetLanguage && (
                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-4 py-2 rounded-full flex items-center gap-3">
                              <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></span>
-                             <span className="text-xs font-medium">Connecting to Translator...</span>
+                             <span className="text-xs font-medium">Connected to Translator</span>
                         </div>
                     )}
                 </div>

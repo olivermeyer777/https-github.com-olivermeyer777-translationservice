@@ -6,6 +6,7 @@ interface ConnectOptions {
   userLanguage: string;
   targetLanguage: string;
   userRole: 'CUSTOMER' | 'AGENT';
+  voiceName: string; // 'Kore' | 'Fenrir' | 'Puck' etc.
   audioInputDeviceId?: string; // Specific Mic
   onAudioData: (base64Audio: string) => void;
   onClose: () => void;
@@ -89,19 +90,21 @@ export class GeminiLiveService {
     this.outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     
     // Strict Translator Role
+    // We explicitly tell it NOT to answer, but ONLY to translate.
     const systemInstruction = `
-      You are a real-time voice translator.
-      
-      User Context:
-      - Input Source: ${options.userRole} speaking ${options.userLanguage}.
-      - Target Audience: Speaking ${options.targetLanguage}.
-
-      Your Task:
-      1. Listen to the ${options.userLanguage} audio.
-      2. Translate it immediately into ${options.targetLanguage}.
-      3. Output ONLY the spoken translation. 
-      4. DO NOT engage in conversation.
-      5. DO NOT translate silence or background noise.
+    SYSTEM INSTRUCTION:
+    You are a professional voice translator acting as an interpreter between two people.
+    
+    CONFIGURATION:
+    - Input Language: ${options.userLanguage}
+    - Output Language: ${options.targetLanguage}
+    
+    RULES:
+    1. Listen to the user's speech in ${options.userLanguage}.
+    2. TRANSLATE it directly into ${options.targetLanguage}.
+    3. DO NOT answer the user's questions. DO NOT be a helpful assistant. ONLY TRANSLATE.
+    4. Maintain the tone and emotion of the speaker.
+    5. If there is silence or noise, output nothing.
     `;
 
     try {
@@ -112,7 +115,7 @@ export class GeminiLiveService {
           responseModalities: [Modality.AUDIO],
           systemInstruction: systemInstruction,
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: options.voiceName } },
           },
           inputAudioTranscription: { },
           outputAudioTranscription: { },

@@ -73,16 +73,24 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   useEffect(() => {
     // 1. Subscribe to messages
     const cleanup = signaling.subscribe((msg: SignalingMessage) => {
+        // PING received from someone else
         if (msg.type === 'PING') {
             if (msg.role !== userRole) {
-                // Someone else is looking for us. Announce ourselves!
+                // If we receive a PING from the other role, we know they are there AND what language they speak
+                if (!targetLanguage || targetLanguage.code !== msg.language.code) {
+                    console.log("Found partner via PING:", msg.role, msg.language.name);
+                    setTargetLanguage(msg.language);
+                }
+                
+                // Always announce ourselves back so they find us too
                 signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
             }
         }
 
         if (msg.type === 'JOIN_ROOM') {
             if (msg.role !== userRole) {
-                // Found our partner!
+                // Explicit join from partner
+                console.log("Partner JOINED:", msg.role, msg.language.name);
                 setTargetLanguage(msg.language);
             }
         }
@@ -104,24 +112,19 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
         }
     });
 
-    // 2. Start Heartbeat (PING) until we find a target
+    // 2. Start Heartbeat (PING)
+    // We ping periodically to announce our presence.
+    // We include OUR language so the other side can connect immediately upon hearing it.
     const startHeartbeat = () => {
         if (heartbeatRef.current) clearInterval(heartbeatRef.current);
         
-        // Announce immediately
-        signaling.send({ type: 'JOIN_ROOM', role: userRole, language: userLanguage });
-        signaling.send({ type: 'PING', role: userRole });
+        // Initial announce
+        signaling.send({ type: 'PING', role: userRole, language: userLanguage });
 
         // Loop
         heartbeatRef.current = window.setInterval(() => {
-            if (!targetLanguage) {
-                 signaling.send({ type: 'PING', role: userRole });
-            } else {
-                // If we have a target, we can slow down or stop pinging
-                // We keep pinging occasionally to handle reconnects if the other tab refreshes
-                // but checking the loop ensures we don't start unnecessary new loops
-            }
-        }, 2000);
+             signaling.send({ type: 'PING', role: userRole, language: userLanguage });
+        }, 1500); // Ping every 1.5s
     };
 
     startHeartbeat();
@@ -136,7 +139,7 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   useEffect(() => {
     if (!targetLanguage || isConnected || isConnecting) return;
     
-    // Prevent connecting if we hit max retries recently (basic circuit breaker)
+    // Prevent connecting if we hit max retries recently
     if (retryCountRef.current > 5) {
         setError("Unable to connect to translation service. Please check your network or API Key.");
         return;
@@ -150,10 +153,16 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
         serviceRef.current = service;
 
         try {
+            // Distinct voices:
+            // If I am Customer, my translator (heard by Agent) should sound like 'Kore' (Female)
+            // If I am Agent, my translator (heard by Customer) should sound like 'Fenrir' (Male)
+            const myTranslatorVoice = userRole === UserRole.CUSTOMER ? 'Kore' : 'Fenrir';
+
             await service.connect({
                 userLanguage: userLanguage.geminiName,
                 targetLanguage: targetLanguage.geminiName,
                 userRole: userRole,
+                voiceName: myTranslatorVoice,
                 audioInputDeviceId,
                 // On Audio Data (Translation of MY voice): Broadcast to other
                 onAudioData: (base64Audio) => {
@@ -195,10 +204,9 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
                     retryCountRef.current += 1;
                     const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
                     retryTimeoutRef.current = window.setTimeout(() => {
-                        // Trigger effect re-run by toggling a dummy state or just relying on deps
-                        // In this case, since isConnected is false, the effect will naturally run again 
-                        // IF we don't block it. We just need to clear the timeout.
                         retryTimeoutRef.current = null;
+                        // Force re-evaluation
+                        setIsConnected(false); 
                     }, delay);
                 }
             });
@@ -233,9 +241,8 @@ export const useGeminiTranslator = ({ userLanguage, userRole, audioInputDeviceId
   }, []);
 
   const connect = useCallback(() => {
-      // Handled automatically via effects, but can be exposed for manual retry
       retryCountRef.current = 0;
-      setIsConnected(false); // Trigger effect
+      setIsConnected(false);
   }, []);
 
   const setMuted = useCallback((muted: boolean) => {
