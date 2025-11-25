@@ -48,7 +48,8 @@ const Icons = {
 // --- COMPONENTS ---
 
 const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ role, selectedLang }) => {
-  const [showTranscript, setShowTranscript] = useState(true);
+  // Mobile: Default to collapsed transcript (false), Desktop: Open (true)
+  const [showTranscript, setShowTranscript] = useState(() => window.innerWidth >= 1024);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCamOn, setIsCamOn] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -154,26 +155,26 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
             </div>
         )}
 
-        <div className="flex-1 relative min-h-0 flex">
-            {/* Remote Video */}
-            <div className="flex-1 relative bg-[#202124] flex items-center justify-center">
+        <div className="flex-1 relative min-h-0 flex flex-col md:flex-row">
+            {/* Remote Video Container */}
+            <div className="flex-1 relative bg-[#202124] flex items-center justify-center overflow-hidden">
                 {remoteStream ? (
                     <video 
                         ref={setRemoteVideoRef}
                         autoPlay 
                         playsInline 
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain bg-black"
                     />
                 ) : (
-                    <div className="flex flex-col items-center gap-6 opacity-50">
-                        <div className="w-32 h-32 rounded-full bg-gray-700 flex items-center justify-center animate-pulse">
-                            <span className="text-4xl text-gray-500">
+                    <div className="flex flex-col items-center gap-6 opacity-50 px-4 text-center">
+                        <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gray-700 flex items-center justify-center animate-pulse">
+                            <span className="text-3xl md:text-4xl text-gray-500">
                                 {role === UserRole.CUSTOMER ? 'Agent' : 'Client'}
                             </span>
                         </div>
-                        <p className="text-lg font-light tracking-wide text-center">
+                        <p className="text-base md:text-lg font-light tracking-wide">
                             {targetLanguage 
-                                ? `Connected to ${targetLanguage.name} Speaker...`
+                                ? `Connected to ${targetLanguage.name} Speaker`
                                 : 'Waiting for participant...'}
                             <br/>
                             <span className="text-xs font-mono mt-2 block bg-gray-800 px-2 py-1 rounded inline-block">
@@ -183,8 +184,8 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
                     </div>
                 )}
 
-                {/* Local Video PIP */}
-                <div className="absolute top-6 left-6 w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10 transition-all duration-300 hover:scale-105 group">
+                {/* Local Video PIP - Responsive Sizing */}
+                <div className="absolute top-4 left-4 w-28 md:w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 z-10 transition-all duration-300 hover:scale-105 group">
                     <video 
                         ref={setLocalVideoRef} 
                         autoPlay 
@@ -197,13 +198,15 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
                             <Icons.Video on={false} />
                         </div>
                     )}
-                    <div className="absolute bottom-2 left-2 text-[10px] font-medium px-2 py-0.5 bg-black/50 rounded backdrop-blur-sm flex items-center gap-2">
+                    <div className="absolute bottom-2 left-2 text-[8px] md:text-[10px] font-medium px-2 py-0.5 bg-black/50 rounded backdrop-blur-sm flex items-center gap-2">
                         You ({selectedLang.flag})
-                        <Visualizer isActive={isMicOn} />
+                        <div className="scale-75 origin-left md:scale-100">
+                            <Visualizer isActive={isMicOn} />
+                        </div>
                     </div>
                     
                     {/* Translation Bubble Overlay */}
-                    <div className="absolute -bottom-14 left-0 w-full flex justify-center">
+                    <div className="absolute -bottom-14 left-0 w-full flex justify-center scale-75 md:scale-100 origin-top">
                          <TranslationBubble show={isTranslating} />
                     </div>
                 </div>
@@ -214,17 +217,11 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
                         {geminiError}
                     </div>
                 )}
-                
-                {targetLanguage && !remoteStream && (
-                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#FFCC00] text-black px-4 py-2 rounded-full text-sm font-bold shadow-lg animate-fade-in-down z-40">
-                        Partner Connected ({targetLanguage.name})
-                    </div>
-                )}
             </div>
 
-            {/* Transcript */}
+            {/* Transcript - Absolute overlay on Mobile, Sidebar on Desktop */}
             {showTranscript && (
-                <div className="w-80 bg-white border-l border-gray-200 flex flex-col text-gray-900 animate-slide-in-right z-30">
+                <div className="absolute inset-0 z-40 md:static md:w-80 bg-white md:border-l md:border-gray-200 flex flex-col text-gray-900 animate-slide-in-right">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f8fafc]">
                         <h3 className="font-bold text-sm uppercase tracking-wider text-gray-500">Live Transcript</h3>
                         <button onClick={() => setShowTranscript(false)} className="text-gray-400 hover:text-gray-600">
@@ -252,41 +249,48 @@ const SessionView: React.FC<{ role: UserRole, selectedLang: Language }> = ({ rol
             )}
         </div>
 
-        {/* Control Bar */}
-        <div className="h-24 bg-[#1e1e1e] border-t border-white/5 flex items-center justify-between px-6 z-20 shrink-0">
-            <div className="flex items-center gap-4 text-sm font-medium text-gray-300 w-1/3">
+        {/* Control Bar - Compact on Mobile */}
+        <div className="h-20 md:h-24 bg-[#1e1e1e] border-t border-white/5 flex items-center justify-between px-4 md:px-6 z-20 shrink-0">
+            {/* Info Section - Hide labels on mobile */}
+            <div className="hidden md:flex items-center gap-4 text-sm font-medium text-gray-300 w-1/3">
                  <div className={`h-2 w-2 rounded-full ${isGeminiConnected ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500'}`}></div>
                  {role === UserRole.CUSTOMER ? 'Video-Beratung' : 'Client Consultation'}
                  <span className="text-gray-600">|</span>
                  {selectedLang.flag} {selectedLang.name}
             </div>
+            {/* Mobile Status Indicator */}
+            <div className="md:hidden flex items-center gap-2 mr-2">
+                 <div className={`h-2 w-2 rounded-full ${isGeminiConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                 <span className="text-lg">{selectedLang.flag}</span>
+            </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 md:gap-4 flex-1 justify-center md:flex-none">
                 <button 
                     onClick={() => setIsMicOn(!isMicOn)}
-                    className={`h-14 w-14 flex items-center justify-center rounded-full transition-all duration-200 shadow-lg ${isMicOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
+                    className={`h-12 w-12 md:h-14 md:w-14 flex items-center justify-center rounded-full transition-all duration-200 shadow-lg ${isMicOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
                 >
                     <Icons.Mic on={isMicOn} />
                 </button>
 
                 <button 
                     onClick={() => setIsCamOn(!isCamOn)}
-                    className={`h-14 w-14 flex items-center justify-center rounded-full transition-all duration-200 shadow-lg ${isCamOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
+                    className={`h-12 w-12 md:h-14 md:w-14 flex items-center justify-center rounded-full transition-all duration-200 shadow-lg ${isCamOn ? 'bg-[#3c4043] hover:bg-[#4a4e51] text-white' : 'bg-red-600 text-white'}`}
                 >
                     <Icons.Video on={isCamOn} />
                 </button>
 
-                <div className="w-px h-8 bg-gray-600 mx-2"></div>
+                <div className="w-px h-6 md:h-8 bg-gray-600 mx-1 md:mx-2"></div>
 
                 <Button 
                     onClick={handleEndCall}
-                    className="!rounded-full px-8 bg-red-600 hover:bg-red-700 border-none text-white h-14 shadow-red-900/50 shadow-lg"
+                    className="!rounded-full px-4 md:px-8 bg-red-600 hover:bg-red-700 border-none text-white h-12 md:h-14 shadow-red-900/50 shadow-lg"
                 >
                     <Icons.PhoneX />
+                    <span className="hidden md:inline ml-2">End Call</span>
                 </Button>
             </div>
 
-            <div className="flex items-center justify-end gap-3 w-1/3">
+            <div className="flex items-center justify-end gap-2 md:gap-3 w-auto md:w-1/3">
                  <button 
                     onClick={() => setShowTranscript(!showTranscript)}
                     className={`p-3 rounded-full transition-all ${showTranscript ? 'bg-[#8ab4f8] text-[#202124]' : 'text-gray-300 hover:bg-[#3c4043]'}`}
@@ -364,31 +368,33 @@ const Launcher: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
         <div className="h-2 bg-[#FFCC00] w-full" />
-        <header className="bg-white border-b border-gray-200 px-8 py-5 flex items-center justify-between">
+        <header className="bg-white border-b border-gray-200 px-4 md:px-8 py-5 flex items-center justify-between">
              <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-[#FFCC00] flex items-center justify-center font-bold text-2xl rounded-sm text-black">P</div>
+                  <div className="w-10 h-10 md:w-12 md:h-12 bg-[#FFCC00] flex items-center justify-center font-bold text-xl md:text-2xl rounded-sm text-black">P</div>
                   <div>
-                      <h1 className="text-xl font-bold tracking-tight text-black">PostBranch Connect</h1>
+                      <h1 className="text-lg md:text-xl font-bold tracking-tight text-black">PostBranch Connect</h1>
                   </div>
              </div>
-             <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded font-mono text-sm border border-yellow-200">
-                Session ID: {generatedRoomId}
+             <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded font-mono text-xs md:text-sm border border-yellow-200">
+                ID: {generatedRoomId}
              </div>
         </header>
         
-        <div className="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-center gap-2 text-blue-800 text-sm">
-             <Icons.Share />
-             <span className="font-semibold">Cross-Device Ready:</span> 
-             Use Session ID <b>{generatedRoomId}</b> to connect from any device.
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-3 flex flex-col md:flex-row items-center justify-center gap-2 text-blue-800 text-xs md:text-sm text-center">
+             <div className="flex items-center gap-2">
+                 <Icons.Share />
+                 <span className="font-semibold">Cross-Device Ready:</span> 
+             </div>
+             <span>Use Session ID <b>{generatedRoomId}</b> to connect from any device.</span>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
              <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="group relative bg-white rounded-3xl p-10 shadow-lg hover:shadow-2xl transition-all duration-300 border border-transparent hover:border-yellow-400 flex flex-col items-center text-center">
-                       <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-500 mb-6 group-hover:scale-110 transition-transform">
+                  <div className="group relative bg-white rounded-3xl p-8 md:p-10 shadow-lg hover:shadow-2xl transition-all duration-300 border border-transparent hover:border-yellow-400 flex flex-col items-center text-center">
+                       <div className="w-20 h-20 md:w-24 md:h-24 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-500 mb-6 group-hover:scale-110 transition-transform">
                             <Icons.User />
                        </div>
-                       <h2 className="text-3xl font-bold text-gray-900 mb-4">Customer Kiosk</h2>
+                       <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Customer Kiosk</h2>
                        <Button 
                           onClick={() => handleStart(UserRole.CUSTOMER)}
                           variant="post-yellow"
@@ -399,11 +405,11 @@ const Launcher: React.FC = () => {
                        </Button>
                   </div>
 
-                  <div className="group relative bg-white rounded-3xl p-10 shadow-lg hover:shadow-2xl transition-all duration-300 border border-transparent hover:border-blue-400 flex flex-col items-center text-center">
-                        <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform">
+                  <div className="group relative bg-white rounded-3xl p-8 md:p-10 shadow-lg hover:shadow-2xl transition-all duration-300 border border-transparent hover:border-blue-400 flex flex-col items-center text-center">
+                        <div className="w-20 h-20 md:w-24 md:h-24 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform">
                             <Icons.Briefcase />
                        </div>
-                       <h2 className="text-3xl font-bold text-gray-900 mb-4">Agent Portal</h2>
+                       <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Agent Portal</h2>
                        <Button 
                           onClick={() => handleStart(UserRole.AGENT)}
                           variant="secondary"
@@ -416,7 +422,7 @@ const Launcher: React.FC = () => {
              </div>
         </div>
         
-        <footer className="text-center py-6 text-gray-400 text-sm">
+        <footer className="text-center py-6 text-gray-400 text-xs md:text-sm px-4">
             Powered by Google Gemini 2.5 Live API & WebRTC (via MQTT Signaling)
         </footer>
     </div>

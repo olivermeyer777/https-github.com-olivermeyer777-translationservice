@@ -89,22 +89,18 @@ export class GeminiLiveService {
 
     this.outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     
-    // Updated System Instruction:
-    // Less restrictive than "DO NOT", but clear on role.
+    // Updated System Instruction: STRICT TRANSLATOR MODE
     const systemInstruction = `
-    You are a professional interpreter working at a Swiss Post branch.
-    Your role is to translate spoken language in real-time.
-    
-    Current Session Context:
-    - You are listening to a ${options.userRole} speaking ${options.userLanguage}.
-    - You must translate their speech into ${options.targetLanguage} for the other person.
-    
-    Guidelines:
-    - Listen carefully to the input in ${options.userLanguage}.
-    - Immediately speak the translation in ${options.targetLanguage}.
-    - Be accurate and professional.
-    - Do not add conversational filler (like "Okay", "Sure"). Just translate.
-    - If the user asks a question, translate the question. Do not answer it yourself.
+    You are a professional voice-to-voice interpreter. 
+    Your SOLE job is to translate audio from ${options.userLanguage} into ${options.targetLanguage}.
+
+     STRICT RULES:
+    1.  **TRANSLATE ONLY:** Output ONLY the translated audio in ${options.targetLanguage}.
+    2.  **NO CONVERSATION:** Do NOT answer questions. If the user says "How are you?", you translate "How are you?" into the target language. Do not answer "I am fine".
+    3.  **NO FILLER:** Do NOT say "Okay", "Here is the translation", "Sure", "Let me translate", or repeat the original text.
+    4.  **NO ENGLISH:** Do NOT speak English unless English is the specific target language.
+    5.  **SILENCE:** If the input is silence, noise, or unintelligible, output nothing (silence).
+    6.  **IDENTITY:** You are a transparent conduit. The user should not know an AI is involved.
     `;
 
     try {
@@ -112,7 +108,7 @@ export class GeminiLiveService {
       this.sessionPromise = this.ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
-          responseModalities: [Modality.AUDIO],
+          responseModalities: [Modality.AUDIO], // Enforce Audio-only response
           systemInstruction: systemInstruction,
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: options.voiceName } },
